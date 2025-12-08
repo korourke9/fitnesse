@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     ]
     
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/fitnesse"
+    DATABASE_URL: str = "sqlite:///./fitnesse.db"
     
     # Security
     SECRET_KEY: str = "change-me-in-production"
