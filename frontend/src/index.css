@@ -1,3 +1,225 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  /* Custom color palette - Sophisticated earth tones */
+  --color-primary-50: #eff5f1;
+  --color-primary-100: #e0ebe3;
+  --color-primary-200: #c0d8c7;
+  --color-primary-300: #a1c4ab;
+  --color-primary-400: #82b08f;
+  --color-primary-500: #629d73;
+  --color-primary-600: #4f7d5c;
+  --color-primary-700: #3b5e45;
+  --color-primary-800: #273f2e;
+  --color-primary-900: #141f17;
+  --color-primary-950: #0e1610;
+  
+  --color-accent-50: #f2f0f4;
+  --color-accent-100: #e6e1ea;
+  --color-accent-200: #ccc4d4;
+  --color-accent-300: #b3a6bf;
+  --color-accent-400: #9a89a9;
+  --color-accent-500: #806b94;
+  --color-accent-600: #675676;
+  --color-accent-700: #4d4059;
+  --color-accent-800: #332b3b;
+  --color-accent-900: #1a151e;
+  --color-accent-950: #120f15;
+  
+  --color-dust-grey-50: #f2f3f2;
+  --color-dust-grey-100: #e5e6e6;
+  --color-dust-grey-200: #cbcdcc;
+  --color-dust-grey-300: #b1b4b3;
+  --color-dust-grey-400: #979b99;
+  --color-dust-grey-500: #7d8280;
+  --color-dust-grey-600: #646866;
+  --color-dust-grey-700: #4b4e4d;
+  --color-dust-grey-800: #323433;
+  --color-dust-grey-900: #191a1a;
+  --color-dust-grey-950: #111212;
+  
+  --color-jade-green-50: #e8fdee;
+  --color-jade-green-100: #d0fbdc;
+  --color-jade-green-200: #a2f6ba;
+  --color-jade-green-300: #73f297;
+  --color-jade-green-400: #44ee74;
+  --color-jade-green-500: #16e952;
+  --color-jade-green-600: #11bb41;
+  --color-jade-green-700: #0d8c31;
+  --color-jade-green-800: #095d21;
+  --color-jade-green-900: #042f10;
+  --color-jade-green-950: #03210b;
+  
+  --color-muted-teal-50: #eff5f1;
+  --color-muted-teal-100: #e0ebe3;
+  --color-muted-teal-200: #c0d8c7;
+  --color-muted-teal-300: #a1c4ab;
+  --color-muted-teal-400: #82b08f;
+  --color-muted-teal-500: #629d73;
+  --color-muted-teal-600: #4f7d5c;
+  --color-muted-teal-700: #3b5e45;
+  --color-muted-teal-800: #273f2e;
+  --color-muted-teal-900: #141f17;
+  --color-muted-teal-950: #0e1610;
+  
+  --color-ash-grey-50: #f0f4f4;
+  --color-ash-grey-100: #e2e9e8;
+  --color-ash-grey-200: #c5d3d1;
+  --color-ash-grey-300: #a8bdba;
+  --color-ash-grey-400: #8ba7a3;
+  --color-ash-grey-500: #6e918d;
+  --color-ash-grey-600: #587470;
+  --color-ash-grey-700: #425754;
+  --color-ash-grey-800: #2c3a38;
+  --color-ash-grey-900: #161d1c;
+  --color-ash-grey-950: #0f1414;
+  
+  --color-slate-grey-50: #f1f2f3;
+  --color-slate-grey-100: #e3e5e8;
+  --color-slate-grey-200: #c8cbd0;
+  --color-slate-grey-300: #acb1b9;
+  --color-slate-grey-400: #9197a1;
+  --color-slate-grey-500: #757d8a;
+  --color-slate-grey-600: #5e646e;
+  --color-slate-grey-700: #464b53;
+  --color-slate-grey-800: #2f3237;
+  --color-slate-grey-900: #17191c;
+  --color-slate-grey-950: #101213;
+  
+  /* Custom shadows */
+  --shadow-soft: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+  --shadow-soft-lg: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+  
+  /* Custom animations */
+  --animate-fade-in: fadeIn 0.3s ease-in-out;
+  --animate-slide-up: slideUp 0.3s ease-out;
+  --animate-slide-in-right: slideInRight 0.3s ease-out;
+  --animate-slide-in-left: slideInLeft 0.3s ease-out;
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Base styles */
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom utilities */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.gradient-text {
+  background: linear-gradient(to right, #629d73, #806b94);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.message-appear {
+  animation: messageAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.typing-dot {
+  animation: typing 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #82b08f 0%, #629d73 100%);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #629d73 0%, #4f7d5c 100%);
+}
+
+/* Selection color */
+::selection {
+  background-color: #c0d8c7;
+  color: #273f2e;
+}
