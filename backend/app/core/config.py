@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     ]
     
     # Database
-    DATABASE_URL: str = "sqlite:///./fitnesse.db"
+    DATABASE_URL: str = "sqlite:///./fitnesse.db"  # Override with environment variable in production
     
     # Security
     SECRET_KEY: str = "change-me-in-production"

@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 
 from app.core.database import get_db
+from app.models.user import User
 from app.models.conversation import Conversation, AgentType
 from app.models.message import Message
 from app.api.schemas.chat import ChatRequest, ChatResponse, MessageResponse
@@ -26,7 +27,21 @@ async def chat_onboarding(
     """
     # For now, we'll use a temporary user_id
     # TODO: Get from authentication
-    user_id = "temp-user-123"
+    temp_user_id = "temp-user-123"
+    temp_user_email = "temp@fitnesse.local"
+    
+    # Get or create user
+    user = db.query(User).filter(User.id == temp_user_id).first()
+    if not user:
+        user = User(
+            id=temp_user_id,
+            email=temp_user_email
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    user_id = user.id
     
     # Get or create conversation
     if request.conversation_id:

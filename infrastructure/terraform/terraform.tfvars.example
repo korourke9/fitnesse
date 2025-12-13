@@ -1,0 +1,12 @@
+aws_region      = "us-east-1"
+environment     = "dev"
+project_name    = "fitnesse"
+database_name   = "fitnesse"
+database_username = "fitnesse_admin"
+database_password = "CHANGE_ME_TO_SECURE_PASSWORD"
+
+allowed_cidr_blocks = [
+  "0.0.0.0/0"  # Restrict this in production
+]
+
+
