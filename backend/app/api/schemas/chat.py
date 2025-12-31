@@ -38,6 +38,7 @@ class ChatRequest(BaseModel):
     """Schema for chat request."""
     message: str
     conversation_id: Optional[str] = None
+    agent_type: Optional[str] = None  # Optional override for which agent handles this message
 
 
 class ChatResponse(BaseModel):

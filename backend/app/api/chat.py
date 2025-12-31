@@ -315,6 +315,17 @@ async def chat(
         Message.conversation_id == conversation.id
     ).order_by(Message.created_at).all()
     
+    # If agent_type is provided in request, update the conversation
+    if request.agent_type:
+        try:
+            # AgentType enum values are lowercase, so convert to lowercase
+            requested_agent = AgentType(request.agent_type.lower())
+            if conversation.agent_type != requested_agent:
+                conversation.agent_type = requested_agent
+                db.commit()
+        except ValueError:
+            pass  # Ignore invalid agent types, use conversation's current agent
+    
     # Route to appropriate agent based on conversation state
     agent_type = conversation.agent_type
     
@@ -367,3 +378,36 @@ async def chat(
         ),
         metadata=metadata
     )
+
+
+from pydantic import BaseModel
+
+class SwitchAgentRequest(BaseModel):
+    conversation_id: str
+    agent_type: str
+
+
+@router.post("/chat/switch-agent")
+async def switch_agent(
+    request: SwitchAgentRequest,
+    db: Session = Depends(get_db)
+):
+    """Switch the active agent for a conversation."""
+    # Find the conversation
+    conversation = db.query(Conversation).filter(
+        Conversation.id == request.conversation_id
+    ).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Validate and set the agent type
+    try:
+        new_agent_type = AgentType(request.agent_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid agent type: {request.agent_type}")
+    
+    conversation.agent_type = new_agent_type
+    db.commit()
+    
+    return {"status": "ok", "agent_type": new_agent_type.value}

@@ -17,12 +17,14 @@ interface ChatContainerProps {
   onConversationStart?: (conversationId: string) => void;
 }
 
-const agentInfo: Record<AgentType, { title: string; icon: string; color: string }> = {
-  onboarding: { title: 'Health Assistant', icon: '📋', color: 'from-primary-500 to-primary-600' },
-  coordination: { title: 'Health Assistant', icon: '🏠', color: 'from-primary-500 to-primary-600' },
-  nutritionist: { title: 'Nutritionist', icon: '🥗', color: 'from-green-500 to-green-600' },
-  trainer: { title: 'Personal Trainer', icon: '💪', color: 'from-orange-500 to-orange-600' },
+const agentInfo: Record<AgentType, { title: string; icon: string; color: string; description: string }> = {
+  onboarding: { title: 'Onboarding', icon: '📋', color: 'from-primary-500 to-primary-600', description: 'Get started' },
+  coordination: { title: 'Coordinator', icon: '🏠', color: 'from-primary-500 to-primary-600', description: 'Navigate app' },
+  nutritionist: { title: 'Nutritionist', icon: '🥗', color: 'from-green-500 to-green-600', description: 'Meal tracking' },
+  trainer: { title: 'Personal Trainer', icon: '💪', color: 'from-orange-500 to-orange-600', description: 'Workout tracking' },
 };
+
+const agentOrder: AgentType[] = ['onboarding', 'coordination', 'nutritionist', 'trainer'];
 
 export default function ChatContainer({ 
   conversationId: initialConversationId,
@@ -32,7 +34,26 @@ export default function ChatContainer({
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const [isLoading, setIsLoading] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<AgentType>('onboarding');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleAgentSwitch = (agent: AgentType) => {
+    setCurrentAgent(agent);
+    setIsDropdownOpen(false);
+    // Agent type will be sent with the next message
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -59,6 +80,7 @@ export default function ChatContainer({
       const response = await apiClient.post('/api/chat', {
         message,
         conversation_id: conversationId,
+        agent_type: currentAgent,  // Already lowercase
       });
 
       const { conversation_id, user_message, assistant_message, metadata } = response.data;
@@ -107,18 +129,63 @@ export default function ChatContainer({
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-soft-lg overflow-hidden border border-gray-100">
-      {/* Chat Header - dynamically shows current agent */}
+      {/* Chat Header - dynamically shows current agent with dropdown */}
       <div className={`relative bg-gradient-to-r ${agentInfo[currentAgent].color} px-6 py-4 border-b border-primary-700/20 transition-all duration-300`}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-soft text-2xl">
-            {agentInfo[currentAgent].icon}
+          {/* Clickable agent icon with dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-soft text-2xl hover:bg-white hover:scale-105 transition-all duration-200 cursor-pointer"
+              title="Switch agent"
+            >
+              {agentInfo[currentAgent].icon}
+            </button>
+            
+            {/* Dropdown menu */}
+            {isDropdownOpen && (
+              <div className="absolute top-12 left-0 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-2 min-w-[200px] animate-fade-in">
+                {agentOrder.map((agent) => (
+                  <button
+                    key={agent}
+                    onClick={() => handleAgentSwitch(agent)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
+                      currentAgent === agent ? 'bg-primary-50' : ''
+                    }`}
+                  >
+                    <span className="text-2xl">{agentInfo[agent].icon}</span>
+                    <div className="text-left">
+                      <div className={`font-medium ${currentAgent === agent ? 'text-primary-600' : 'text-gray-800'}`}>
+                        {agentInfo[agent].title}
+                      </div>
+                      <div className="text-xs text-gray-500">{agentInfo[agent].description}</div>
+                    </div>
+                    {currentAgent === agent && (
+                      <span className="ml-auto text-primary-500">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+          
           <div className="flex-1">
             <h3 className="text-white font-semibold text-lg">{agentInfo[currentAgent].title}</h3>
             {currentAgent !== 'onboarding' && (
               <p className="text-white/70 text-xs">Say "help" to see options</p>
             )}
           </div>
+          
+          {/* Dropdown indicator */}
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="text-white/70 hover:text-white transition-colors"
+            title="Switch agent"
+          >
+            <svg className={`w-5 h-5 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
         </div>
         
         {/* Decorative gradient overlay */}
