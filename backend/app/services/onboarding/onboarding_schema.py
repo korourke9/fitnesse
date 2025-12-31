@@ -44,4 +44,8 @@ class OnboardingResponse(BaseModel):
     """Structured response from onboarding agent."""
     response: str = Field(..., description="Your conversational response to the user (2-3 sentences, friendly and natural)")
     extracted_data: Optional[ExtractedData] = None
+    is_complete: bool = Field(
+        False,
+        description="Set to true when onboarding is complete. Onboarding is complete when you have sufficient information to create a personalized plan (goals, basic biometrics, lifestyle constraints). You can ask the user if they want to provide more info, but if they indicate they're done or you have enough info, set this to true."
+    )
 

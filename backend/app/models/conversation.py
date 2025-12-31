@@ -10,6 +10,7 @@ from app.core.database import Base
 class AgentType(str, enum.Enum):
     """Agent type enumeration."""
     ONBOARDING = "onboarding"
+    COORDINATION = "coordination"
     NUTRITIONIST = "nutritionist"
     TRAINER = "trainer"
     ANALYTICS = "analytics"

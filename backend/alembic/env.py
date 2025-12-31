@@ -11,7 +11,7 @@ from app.core.database import Base
 from app.core.config import settings
 
 # Import all models so Alembic can detect them
-from app.models import User, Conversation, Message, UserProfile, Goal  # noqa
+from app.models import User, Conversation, Message, UserProfile, Goal, Plan, PlanItem  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

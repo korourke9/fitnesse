@@ -10,10 +10,19 @@ interface Message {
   created_at: string;
 }
 
+type AgentType = 'onboarding' | 'coordination' | 'nutritionist' | 'trainer';
+
 interface ChatContainerProps {
   conversationId?: string;
   onConversationStart?: (conversationId: string) => void;
 }
+
+const agentInfo: Record<AgentType, { title: string; icon: string; color: string }> = {
+  onboarding: { title: 'Health Assistant', icon: '📋', color: 'from-primary-500 to-primary-600' },
+  coordination: { title: 'Health Assistant', icon: '🏠', color: 'from-primary-500 to-primary-600' },
+  nutritionist: { title: 'Nutritionist', icon: '🥗', color: 'from-green-500 to-green-600' },
+  trainer: { title: 'Personal Trainer', icon: '💪', color: 'from-orange-500 to-orange-600' },
+};
 
 export default function ChatContainer({ 
   conversationId: initialConversationId,
@@ -22,6 +31,7 @@ export default function ChatContainer({
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentAgent, setCurrentAgent] = useState<AgentType>('onboarding');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -46,12 +56,17 @@ export default function ChatContainer({
     setIsLoading(true);
     
     try {
-      const response = await apiClient.post('/api/chat/onboarding', {
+      const response = await apiClient.post('/api/chat', {
         message,
         conversation_id: conversationId,
       });
 
-      const { conversation_id, user_message, assistant_message } = response.data;
+      const { conversation_id, user_message, assistant_message, metadata } = response.data;
+      
+      // Update current agent if it changed
+      if (metadata?.agent_type) {
+        setCurrentAgent(metadata.agent_type as AgentType);
+      }
 
       // Update conversation ID if this is a new conversation
       if (!conversationId && conversation_id) {
@@ -92,16 +107,17 @@ export default function ChatContainer({
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-soft-lg overflow-hidden border border-gray-100">
-      {/* Chat Header */}
-      <div className="relative bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4 border-b border-primary-700/20">
+      {/* Chat Header - dynamically shows current agent */}
+      <div className={`relative bg-gradient-to-r ${agentInfo[currentAgent].color} px-6 py-4 border-b border-primary-700/20 transition-all duration-300`}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-soft">
-            <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
+          <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-soft text-2xl">
+            {agentInfo[currentAgent].icon}
           </div>
           <div className="flex-1">
-            <h3 className="text-white font-semibold text-lg">Health Assistant</h3>
+            <h3 className="text-white font-semibold text-lg">{agentInfo[currentAgent].title}</h3>
+            {currentAgent !== 'onboarding' && (
+              <p className="text-white/70 text-xs">Say "help" to see options</p>
+            )}
           </div>
         </div>
         

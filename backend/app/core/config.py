@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     
     # AWS Bedrock
     AWS_REGION: str = "us-east-2"
-    BEDROCK_MODEL_ID: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    # Use cross-region inference profile for Claude 3.5 Sonnet v2
+    BEDROCK_MODEL_ID: str = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
     
     class Config:
         env_file = ".env"

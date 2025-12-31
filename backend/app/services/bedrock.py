@@ -37,15 +37,7 @@ class BedrockService:
                 region_name=settings.AWS_REGION
             )
             # Use provided model_id or default from settings
-            # If the model ID has a version suffix that doesn't work, we'll try the base ID
-            default_model = settings.BEDROCK_MODEL_ID
-            if model_id:
-                self.model_id = model_id
-            elif ":0" in default_model:
-                # Try without the :0 suffix first (some regions don't support versioned IDs)
-                self.model_id = default_model.replace(":0", "")
-            else:
-                self.model_id = default_model
+            self.model_id = model_id if model_id else settings.BEDROCK_MODEL_ID
         except Exception as e:
             error_msg = str(e)
             if "Missing Dependency" in error_msg or "crt" in error_msg.lower():

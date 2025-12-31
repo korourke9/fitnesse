@@ -45,4 +45,5 @@ class ChatResponse(BaseModel):
     conversation_id: str
     user_message: MessageResponse
     assistant_message: MessageResponse
+    metadata: Optional[dict] = None  # For completion status, plan_id, routing info, etc.
 

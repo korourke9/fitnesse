@@ -66,7 +66,14 @@ After each response, you may have learned new information. You MUST respond with
 For goals:
 - If the user mentions a goal that matches an existing goal (similar description or target), update the existing goal rather than creating a duplicate
 - If it's a new goal, create it
-- Goals can evolve over time - update them if the user provides new information about the same goal"""
+- Goals can evolve over time - update them if the user provides new information about the same goal
+
+COMPLETION DETECTION:
+- Set is_complete to true when you have sufficient information to create a personalized plan
+- Minimum requirements: at least one goal, basic biometrics (height/weight or age), and some lifestyle information
+- You can ask the user "Is there anything else you'd like to share?" or "Do you feel ready to create your plan?" before marking complete
+- If the user says they're done, ready, or indicates they don't want to share more, mark is_complete as true
+- If you have enough information even without asking, you can mark it complete"""
         
         # Add context about existing data
         if self.existing_profile:
@@ -238,12 +245,17 @@ For goals:
         self,
         user_message: str,
         conversation_history: List[Message]
-    ) -> str:
+    ) -> tuple[str, bool]:
         """
         Generate a response based on user message and conversation history.
         
         Uses AWS Bedrock to generate conversational responses and extract
         structured data from the conversation.
+        
+        Returns:
+            Tuple of (response_text, is_complete)
+            - response_text: The conversational response
+            - is_complete: True if onboarding is complete, False otherwise
         """
         # Format messages for Bedrock
         messages = self._format_messages(conversation_history)
@@ -263,12 +275,14 @@ For goals:
             try:
                 parsed_response = OnboardingResponse.model_validate(response_data)
                 conversation_response = parsed_response.response
+                is_complete = parsed_response.is_complete
                 # Convert Pydantic model to dict for saving
                 extracted_data = parsed_response.extracted_data.model_dump(exclude_none=True) if parsed_response.extracted_data else None
             except Exception as e:
                 # If validation fails, try to extract what we can (fallback)
                 print(f"Warning: Response validation failed: {str(e)}")
                 conversation_response = response_data.get("response", "")
+                is_complete = response_data.get("is_complete", False)
                 extracted_data = response_data.get("extracted_data")
             
             # Save extracted data to database
@@ -279,10 +293,10 @@ For goals:
                     # Log error but don't fail the response
                     print(f"Error saving extracted data: {str(e)}")
             
-            return conversation_response
+            return conversation_response, is_complete
         
         except Exception as e:
             # Fallback response on error
             print(f"Error in Bedrock invocation: {str(e)}")
-            return "I'm having a bit of trouble right now. Could you try rephrasing that? I'm here to help you create a personalized fitness and nutrition plan!"
+            return "I'm having a bit of trouble right now. Could you try rephrasing that? I'm here to help you create a personalized fitness and nutrition plan!", False
 
