@@ -14,27 +14,40 @@ export default function ChatInput({
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (message.trim() && !disabled) {
       onSendMessage(message.trim());
       setMessage('');
-      inputRef.current?.focus();
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      textareaRef.current?.focus();
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
   };
 
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    // Auto-resize textarea
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="relative border-t border-gray-100 bg-gradient-to-r from-gray-50 to-white p-4">
-      <div className="flex items-center gap-3 relative">
+      <div className="flex items-end gap-3 relative">
         {/* Input container with gradient border effect */}
         <div className={`flex-1 relative transition-all duration-300 ${
           isFocused ? 'scale-[1.01]' : 'scale-100'
@@ -46,33 +59,24 @@ export default function ChatInput({
           }`} />
           
           <div className="relative">
-            <input
-              ref={inputRef}
-              type="text"
+            <textarea
+              ref={textareaRef}
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={handleInput}
               onKeyDown={handleKeyDown}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={placeholder}
               disabled={disabled}
-              className={`w-full px-5 py-3.5 text-[15px] bg-white border-2 rounded-xl transition-all duration-300 placeholder:text-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed ${
+              rows={1}
+              wrap="soft"
+              className={`w-full px-5 py-3.5 text-[15px] bg-white border-2 rounded-xl transition-all duration-300 placeholder:text-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed resize-none overflow-hidden break-words whitespace-pre-wrap ${
                 isFocused
                   ? 'border-transparent shadow-soft-lg'
                   : 'border-gray-200 shadow-soft hover:border-gray-300'
               } focus:outline-none`}
+              style={{ minHeight: '48px', maxHeight: '120px', wordWrap: 'break-word', overflowWrap: 'break-word' }}
             />
-            
-            {/* Emoji/attachment button (optional decoration) */}
-            <button
-              type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-lg hover:bg-gray-100"
-              disabled={disabled}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
           </div>
         </div>
 
@@ -103,7 +107,7 @@ export default function ChatInput({
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        Press Enter to send
+        Press Enter to send, Shift+Enter for new line
       </div>
     </form>
   );

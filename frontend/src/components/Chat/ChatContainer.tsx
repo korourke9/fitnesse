@@ -33,6 +33,16 @@ export default function ChatContainer({
   }, [messages]);
 
   const handleSendMessage = async (message: string) => {
+    // Optimistically add user message immediately for better UX
+    const tempUserMessageId = `temp-${Date.now()}`;
+    const optimisticUserMessage: Message = {
+      id: tempUserMessageId,
+      role: 'user',
+      content: message,
+      created_at: new Date().toISOString(),
+    };
+    
+    setMessages((prev) => [...prev, optimisticUserMessage]);
     setIsLoading(true);
     
     try {
@@ -49,24 +59,31 @@ export default function ChatContainer({
         onConversationStart?.(conversation_id);
       }
 
-      // Add both messages to the chat
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: user_message.id,
-          role: 'user' as const,
-          content: user_message.content,
-          created_at: user_message.created_at,
-        },
-        {
-          id: assistant_message.id,
-          role: 'assistant' as const,
-          content: assistant_message.content,
-          created_at: assistant_message.created_at,
-        },
-      ]);
+      // Replace optimistic message with real messages from server
+      setMessages((prev) => {
+        // Remove the temporary optimistic message
+        const withoutTemp = prev.filter((msg) => msg.id !== tempUserMessageId);
+        // Add the real messages from server
+        return [
+          ...withoutTemp,
+          {
+            id: user_message.id,
+            role: 'user' as const,
+            content: user_message.content,
+            created_at: user_message.created_at,
+          },
+          {
+            id: assistant_message.id,
+            role: 'assistant' as const,
+            content: assistant_message.content,
+            created_at: assistant_message.created_at,
+          },
+        ];
+      });
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessageId));
       // TODO: Show error message to user
     } finally {
       setIsLoading(false);

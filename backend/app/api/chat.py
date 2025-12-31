@@ -9,7 +9,7 @@ from app.models.user import User
 from app.models.conversation import Conversation, AgentType
 from app.models.message import Message
 from app.api.schemas.chat import ChatRequest, ChatResponse, MessageResponse
-from app.services.onboarding_agent import OnboardingAgent
+from app.services.onboarding import OnboardingAgent
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -77,7 +77,7 @@ async def chat_onboarding(
     ).order_by(Message.created_at).all()
     
     # Get agent response
-    agent = OnboardingAgent(db=db)
+    agent = OnboardingAgent(db=db, user_id=user_id, model_id="us.anthropic.claude-3-5-sonnet-20241022-v2:0")
     assistant_content = await agent.get_response(
         user_message=request.message,
         conversation_history=messages

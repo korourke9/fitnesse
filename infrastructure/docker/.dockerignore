@@ -15,7 +15,8 @@ build/
 .env.local
 *.db
 *.sqlite
-alembic/versions/*
-!.gitkeep
+# Exclude __pycache__ in alembic/versions but keep migration files
+alembic/versions/__pycache__
+alembic/versions/*.pyc
 
 

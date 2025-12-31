@@ -1,28 +1,28 @@
-# Fitnesse
+# Local Testing Guide
 
-AI-driven personalized fitness and nutrition application that helps users get personalized diet and exercise recommendations based on their goals, biometric indicators, and lifestyle constraints.
+## Quick Start
 
-## Project Structure
-
-```
-fitnesse/
-├── frontend/          # React + Vite frontend
-├── backend/           # FastAPI backend
-├── infrastructure/    # Infrastructure as Code
-```
-
-## Getting Started
-
-### 1. Start PostgreSQL
+### 1. Run the Setup Script
 ```bash
 cd fitnesse
-docker-compose up -d postgres
+./backend/scripts/dev-setup.sh
 ```
 
-### 2. Start Backend
+This script will:
+- Start PostgreSQL in Docker
+- Create/verify your `.env` file
+- Create/verify your Python virtual environment
+- Install backend dependencies
+
+### 2. Run Database Migrations
 ```bash
 cd backend
-source venv/bin/activate  # If not already activated
+source venv/bin/activate
+alembic upgrade head
+```
+
+### 3. Start Backend
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -30,7 +30,7 @@ The backend will be available at: **http://localhost:8000**
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
-### 3. Start Frontend (in a new terminal)
+### 4. Start Frontend (in a new terminal)
 ```bash
 cd frontend
 npm run dev
@@ -49,11 +49,20 @@ The frontend will be available at: **http://localhost:5173**
 
 ## Prerequisites
 
-- ✅ PostgreSQL running (via Docker Compose)
-- ✅ Backend dependencies installed (`pip install -r requirements.txt`)
-- ✅ Frontend dependencies installed (`npm install`)
-- ✅ AWS credentials configured for Bedrock access
-- ✅ Database migrations applied (`alembic upgrade head`)
+- Docker Desktop installed and running
+- Node.js 20.19+ or 22.12+ installed
+- Python 3.13+ installed
+- AWS credentials configured for Bedrock access
+
+The `dev-setup.sh` script will handle:
+- ✅ Starting PostgreSQL (via Docker Compose)
+- ✅ Creating `.env` file with local database configuration
+- ✅ Creating Python virtual environment
+- ✅ Installing backend dependencies
+
+You'll still need to:
+- ✅ Run database migrations (`alembic upgrade head`)
+- ✅ Install frontend dependencies (`npm install` in `frontend/` directory)
 
 ## AWS Credentials
 
@@ -110,5 +119,4 @@ for goal in goals:
     print(f'Goal: {goal.description} - {goal.target}')
 "
 ```
-
 

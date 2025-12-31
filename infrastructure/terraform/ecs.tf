@@ -65,6 +65,26 @@ resource "aws_iam_role" "ecs_task" {
   tags = local.common_tags
 }
 
+# IAM Policy for ECS Task to access Bedrock
+resource "aws_iam_role_policy" "ecs_bedrock" {
+  name = "${var.project_name}-ecs-bedrock-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+      }
+    ]
+  })
+}
+
 # Security Group for ECS
 resource "aws_security_group" "ecs" {
   name        = "${var.project_name}-ecs-sg"
