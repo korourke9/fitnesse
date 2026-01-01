@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import chat
+from app.api import chat, state, plans, logs
 
 app = FastAPI(
     title="Fitnesse API",
@@ -22,6 +22,9 @@ app.add_middleware(
 
 # Include routers
 app.include_router(chat.router)
+app.include_router(state.router)
+app.include_router(plans.router)
+app.include_router(logs.router)
 
 
 @app.get("/")

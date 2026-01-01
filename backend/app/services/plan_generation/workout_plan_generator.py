@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from app.models.plan import Plan
+from app.models.plan import Plan, PlanType
 from app.models.goal import GoalType
 from app.services.plan_generation.base import BasePlanGenerator
 
@@ -143,6 +143,7 @@ Return ONLY valid JSON with this structure:
         """Get existing active plan or create a new one."""
         existing_plan = self.db.query(Plan).filter(
             Plan.user_id == self.user_id,
+            Plan.plan_type == PlanType.WORKOUT,
             Plan.is_active == True
         ).first()
         
@@ -155,6 +156,7 @@ Return ONLY valid JSON with this structure:
         plan = Plan(
             id=str(uuid.uuid4()),
             user_id=self.user_id,
+            plan_type=PlanType.WORKOUT,
             name=f"{start_date.strftime('%B %Y')} Plan",
             start_date=start_date,
             end_date=end_date,
@@ -185,10 +187,15 @@ Return ONLY valid JSON with this structure:
         """
         plan = self._get_or_create_plan(duration_days)
         
-        # Get existing meal plan for context if available
+        # Get existing meal plan (separate plan type) for context if available
         existing_meal_plan = None
-        if plan.plan_data and plan.plan_data.get("diet"):
-            existing_meal_plan = plan.plan_data["diet"]
+        meal_plan = self.db.query(Plan).filter(
+            Plan.user_id == self.user_id,
+            Plan.plan_type == PlanType.MEAL,
+            Plan.is_active == True
+        ).first()
+        if meal_plan and isinstance(meal_plan.plan_data, dict):
+            existing_meal_plan = meal_plan.plan_data
         
         prompt = self._build_prompt(existing_meal_plan)
         
@@ -211,10 +218,8 @@ Return ONLY valid JSON with this structure:
             print(f"Error generating workout plan: {str(e)}")
             workout_plan_data = self._get_fallback_plan()
         
-        # Update plan with workout data
-        plan_data = plan.plan_data or {}
-        plan_data["exercise"] = workout_plan_data
-        plan.plan_data = plan_data
+        # Update plan with workout plan data
+        plan.plan_data = workout_plan_data
         
         self.db.commit()
         self.db.refresh(plan)

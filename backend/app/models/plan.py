@@ -1,22 +1,41 @@
 """Plan models for storing diet and exercise plans."""
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, JSON, Date, Boolean, Text, Integer
+import enum
+
+from sqlalchemy import Column, String, DateTime, ForeignKey, JSON, Date, Boolean, Integer, Enum as SQLEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
 
+class PlanType(str, enum.Enum):
+    """Plan type enumeration (one plan row per type)."""
+
+    MEAL = "meal"
+    WORKOUT = "workout"
+
+
 class Plan(Base):
     """
-    Plan model for storing user's diet and exercise plans.
+    Plan model for storing a single type of plan (meal or workout).
     
     A plan represents a period of time (typically a month) with specific
-    diet and exercise recommendations tailored to the user's goals and profile.
+    recommendations tailored to the user's goals and profile.
     """
     __tablename__ = "plans"
 
     id = Column(String, primary_key=True, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    # Store enum values ("meal", "workout") in the DB, not the member names.
+    plan_type = Column(
+        SQLEnum(
+            PlanType,
+            name="plantype",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        index=True,
+    )
     
     # Plan metadata
     name = Column(String, nullable=True)  # e.g., "January 2024 Plan"
@@ -25,21 +44,8 @@ class Plan(Base):
     duration_days = Column(Integer, nullable=False)  # Typically 30 days
     
     # Plan content (stored as JSON for flexibility)
-    # Structure: {
-    #   "diet": {
-    #     "daily_calories": 2000,
-    #     "macros": {"protein": 150, "carbs": 200, "fat": 65},
-    #     "meals_per_day": 3,
-    #     "guidelines": ["Eat protein with every meal", ...]
-    #   },
-    #   "exercise": {
-    #     "workouts_per_week": 4,
-    #     "workout_duration_minutes": 45,
-    #     "focus_areas": ["strength", "cardio"],
-    #     "guidelines": ["Rest day between strength sessions", ...]
-    #   },
-    #   "notes": "Custom notes from the AI about this plan"
-    # }
+    # For MEAL plans, this is the diet plan object.
+    # For WORKOUT plans, this is the exercise plan object.
     plan_data = Column(JSON, nullable=False)
     
     # Status

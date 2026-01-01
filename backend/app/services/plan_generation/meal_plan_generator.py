@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from app.models.plan import Plan
+from app.models.plan import Plan, PlanType
 from app.models.goal import GoalType
 from app.services.plan_generation.base import BasePlanGenerator
 
@@ -112,6 +112,7 @@ Return ONLY valid JSON with this structure:
         """Get existing active plan or create a new one."""
         existing_plan = self.db.query(Plan).filter(
             Plan.user_id == self.user_id,
+            Plan.plan_type == PlanType.MEAL,
             Plan.is_active == True
         ).first()
         
@@ -124,6 +125,7 @@ Return ONLY valid JSON with this structure:
         plan = Plan(
             id=str(uuid.uuid4()),
             user_id=self.user_id,
+            plan_type=PlanType.MEAL,
             name=f"{start_date.strftime('%B %Y')} Plan",
             start_date=start_date,
             end_date=end_date,
@@ -172,10 +174,8 @@ Return ONLY valid JSON with this structure:
             print(f"Error generating meal plan: {str(e)}")
             meal_plan_data = self._get_fallback_plan()
         
-        # Update plan with meal data
-        plan_data = plan.plan_data or {}
-        plan_data["diet"] = meal_plan_data
-        plan.plan_data = plan_data
+        # Update plan with meal plan data
+        plan.plan_data = meal_plan_data
         
         self.db.commit()
         self.db.refresh(plan)

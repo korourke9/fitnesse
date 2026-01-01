@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.message import Message
 from app.models.user_profile import UserProfile
 from app.models.goal import Goal
-from app.models.plan import Plan
+from app.models.plan import Plan, PlanType
 from app.models.conversation import AgentType
 from app.services.bedrock import BedrockService
 from app.services.coordination.coordination_schema import CoordinationResponse
@@ -121,8 +121,14 @@ class CoordinationAgent:
         """Build system prompt for coordination agent."""
         profile = self.db.query(UserProfile).filter(UserProfile.user_id == self.user_id).first()
         goals = self.db.query(Goal).filter(Goal.user_id == self.user_id, Goal.is_active == True).all()
-        active_plan = self.db.query(Plan).filter(
+        active_meal_plan = self.db.query(Plan).filter(
             Plan.user_id == self.user_id,
+            Plan.plan_type == PlanType.MEAL,
+            Plan.is_active == True
+        ).first()
+        active_workout_plan = self.db.query(Plan).filter(
+            Plan.user_id == self.user_id,
+            Plan.plan_type == PlanType.WORKOUT,
             Plan.is_active == True
         ).first()
         
@@ -147,8 +153,8 @@ class CoordinationAgent:
                 context_parts.append(f"- {goal.description} (target: {goal.target})")
         
         context_parts.append("\nPlan Status:")
-        has_meal_plan = active_plan and active_plan.plan_data and active_plan.plan_data.get("diet")
-        has_workout_plan = active_plan and active_plan.plan_data and active_plan.plan_data.get("exercise")
+        has_meal_plan = bool(active_meal_plan and isinstance(active_meal_plan.plan_data, dict) and active_meal_plan.plan_data)
+        has_workout_plan = bool(active_workout_plan and isinstance(active_workout_plan.plan_data, dict) and active_workout_plan.plan_data)
         
         if has_meal_plan:
             context_parts.append("- ✅ Meal plan: CREATED - user can log meals with nutritionist")
