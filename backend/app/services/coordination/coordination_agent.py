@@ -6,9 +6,10 @@ from app.models.message import Message
 from app.models.user_profile import UserProfile
 from app.models.goal import Goal
 from app.models.plan import Plan
+from app.models.conversation import AgentType
 from app.services.bedrock import BedrockService
 from app.services.coordination.coordination_schema import CoordinationResponse
-from app.core.config import settings
+from app.services.agents import AgentResponse, Transition
 
 
 class CoordinationAgent:
@@ -24,9 +25,100 @@ class CoordinationAgent:
         self.user_id = user_id
         self.bedrock = BedrockService(model_id=model_id)
     
+    async def process(self, message: str, history: List[Message]) -> AgentResponse:
+        """Process a user message and return a response."""
+        response_text, suggested_agent, action = await self._get_llm_response(message, history)
+        
+        metadata = {
+            "agent_type": AgentType.COORDINATION.value,
+            "suggested_agent": suggested_agent,
+            "action": action
+        }
+        
+        # Handle actions - route to specialist agents with appropriate context
+        if action == "generate_meal_plan":
+            return AgentResponse(
+                content="Let me connect you with our nutritionist to create your meal plan...",
+                metadata=metadata,
+                transition=Transition(
+                    AgentType.NUTRITIONIST,
+                    get_greeting=True,
+                    context={"generate_plan": True}
+                )
+            )
+        elif action == "generate_workout_plan":
+            return AgentResponse(
+                content="Let me connect you with our trainer to create your workout plan...",
+                metadata=metadata,
+                transition=Transition(
+                    AgentType.TRAINER,
+                    get_greeting=True,
+                    context={"generate_plan": True}
+                )
+            )
+        elif action == "route_to_nutritionist":
+            return AgentResponse(
+                content="",
+                metadata=metadata,
+                transition=Transition(AgentType.NUTRITIONIST, get_greeting=True)
+            )
+        elif action == "route_to_trainer":
+            return AgentResponse(
+                content="",
+                metadata=metadata,
+                transition=Transition(AgentType.TRAINER, get_greeting=True)
+            )
+        
+        return AgentResponse(content=response_text, metadata=metadata)
+    
+    async def get_greeting(self, context: dict = None) -> AgentResponse:
+        """Get the agent's initial greeting."""
+        return AgentResponse(
+            content=(
+                "🎉 Great! I have everything I need to create your personalized plans. "
+                "What would you like to do first?\n"
+                "• Generate your meal plan\n"
+                "• Generate your workout plan"
+            ),
+            metadata={"agent_type": AgentType.COORDINATION.value}
+        )
+    
+    async def _get_llm_response(
+        self,
+        user_message: str,
+        conversation_history: List[Message]
+    ) -> tuple[str, Optional[str], Optional[str]]:
+        """Get response from LLM."""
+        messages = self._format_messages(conversation_history)
+        messages.append({"role": "user", "content": user_message})
+        
+        system_prompt = self._build_system_prompt()
+        
+        try:
+            response = self.bedrock.invoke_structured(
+                messages=messages,
+                system_prompt=system_prompt,
+                output_schema=self.response_schema
+            )
+            
+            coordination_response = CoordinationResponse(**response)
+            return (
+                coordination_response.response,
+                coordination_response.suggested_agent,
+                coordination_response.action
+            )
+        except Exception as e:
+            print(f"Error in coordination agent: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return (
+                "I'm here to help! Would you like to generate a meal plan or workout plan?",
+                None,
+                None
+            )
+    
     def _build_system_prompt(self) -> str:
         """Build system prompt for coordination agent."""
-        # Load user context
         profile = self.db.query(UserProfile).filter(UserProfile.user_id == self.user_id).first()
         goals = self.db.query(Goal).filter(Goal.user_id == self.user_id, Goal.is_active == True).all()
         active_plan = self.db.query(Plan).filter(
@@ -54,7 +146,6 @@ class CoordinationAgent:
             for goal in goals:
                 context_parts.append(f"- {goal.description} (target: {goal.target})")
         
-        # Plan status section
         context_parts.append("\nPlan Status:")
         has_meal_plan = active_plan and active_plan.plan_data and active_plan.plan_data.get("diet")
         has_workout_plan = active_plan and active_plan.plan_data and active_plan.plan_data.get("exercise")
@@ -71,102 +162,33 @@ class CoordinationAgent:
         
         context = "\n".join(context_parts) if context_parts else "No user profile or goals yet."
         
-        return f"""You are a friendly front desk coordinator for Fitnesse, an AI-driven health and fitness application. Your role is to help users navigate the application and connect them with the right specialist agents.
+        return f"""You are a friendly front desk coordinator for Fitnesse, an AI-driven health and fitness application.
 
 User Context:
 {context}
 
 Available Agents:
-1. **Nutritionist Agent**: Helps users log meals, track nutrition, estimate macros/calories, and provides nutrition guidance
-2. **Trainer Agent**: Helps users log exercises, track workouts, and provides fitness guidance
-
-Your Responsibilities:
-- Greet users warmly and understand what they want to do
-- Help users generate their personalized plans (meal plan, workout plan)
-- Route users to the appropriate agent (nutritionist for meals, trainer for workouts)
-- Show users their plans if they ask
-- Answer general questions about the app
+1. **Nutritionist Agent**: Helps users log meals and track nutrition
+2. **Trainer Agent**: Helps users log exercises and track workouts
 
 Guidelines:
-- Be conversational, friendly, and helpful
-- Don't be pushy - let users choose what they want to do
+- Be conversational and friendly
 - If user wants to generate a meal plan, use action 'generate_meal_plan'
 - If user wants to generate a workout plan, use action 'generate_workout_plan'
-- If user wants to log meals (and already has a meal plan), use action 'route_to_nutritionist'
-- If user wants to log workouts (and already has a workout plan), use action 'route_to_trainer'
-- If user wants to see their meal plan, use action 'show_meal_plan'
-- If user wants to see their workout plan, use action 'show_workout_plan'
+- If user wants to log meals (and has a meal plan), use action 'route_to_nutritionist'
+- If user wants to log workouts (and has a workout plan), use action 'route_to_trainer'
 - Keep responses concise (2-3 sentences)
 
-When to take action:
-- "Create my meal plan" / "Generate nutrition plan" → action: 'generate_meal_plan'
-- "Create my workout plan" / "Generate exercise plan" → action: 'generate_workout_plan'
-- "Log a meal" / "Track food" / "What I ate" → action: 'route_to_nutritionist' (if they have a meal plan) or suggest generating one first
-- "Log a workout" / "Track exercise" → action: 'route_to_trainer' (if they have a workout plan) or suggest generating one first
-- "Show my meal plan" / "What should I eat" → action: 'show_meal_plan'
-- "Show my workout plan" / "What exercises" → action: 'show_workout_plan'
-- General questions / "What can I do?" → Stay here and explain options
-
-Always be helpful and guide users naturally to the right place."""
+Actions:
+- "Create my meal plan" → action: 'generate_meal_plan'
+- "Create my workout plan" → action: 'generate_workout_plan'
+- "Log a meal" → action: 'route_to_nutritionist' (if they have a meal plan)
+- "Log a workout" → action: 'route_to_trainer' (if they have a workout plan)"""
     
     def _format_messages(self, conversation_history: List[Message]) -> List[dict]:
         """Format conversation history for Bedrock."""
         messages = []
         for msg in conversation_history:
             role = "user" if msg.role == "user" else "assistant"
-            messages.append({
-                "role": role,
-                "content": msg.content
-            })
+            messages.append({"role": role, "content": msg.content})
         return messages
-    
-    async def get_response(
-        self,
-        user_message: str,
-        conversation_history: List[Message]
-    ) -> tuple[str, Optional[str], Optional[str]]:
-        """
-        Generate a response and determine routing.
-        
-        Returns:
-            Tuple of (response_text, suggested_agent, action)
-            - response_text: The conversational response
-            - suggested_agent: 'nutritionist' or 'trainer' if routing, None otherwise
-            - action: 'route_to_nutritionist', 'route_to_trainer', 'show_plan', 'stay_here', or None
-        """
-        messages = self._format_messages(conversation_history)
-        
-        # Add current user message
-        messages.append({
-            "role": "user",
-            "content": user_message
-        })
-        
-        system_prompt = self._build_system_prompt()
-        
-        try:
-            response = self.bedrock.invoke_structured(
-                messages=messages,
-                system_prompt=system_prompt,
-                output_schema=self.response_schema
-            )
-            
-            coordination_response = CoordinationResponse(**response)
-            
-            return (
-                coordination_response.response,
-                coordination_response.suggested_agent,
-                coordination_response.action
-            )
-        except Exception as e:
-            # Log the error for debugging
-            print(f"Error in coordination agent: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            # Fallback response on error
-            return (
-                "I'm here to help you navigate Fitnesse! Would you like to log a meal with our nutritionist, or log a workout with our trainer?",
-                None,
-                None
-            )
-

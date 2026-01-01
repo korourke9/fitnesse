@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from app.models.message import Message
 from app.models.user_profile import UserProfile
 from app.models.goal import Goal, GoalType
+from app.models.conversation import AgentType
 from app.services.bedrock import BedrockService
 from app.services.onboarding.onboarding_schema import OnboardingResponse
+from app.services.agents import AgentResponse, Transition
 from app.core.config import settings
 
 
@@ -38,6 +40,81 @@ class OnboardingAgent:
         
         # Build system prompt with context about existing data
         self.system_prompt = self._build_system_prompt()
+    
+    async def process(self, message: str, history: List[Message]) -> AgentResponse:
+        """Process a user message and return a response."""
+        response_text, is_complete = await self._get_llm_response(message, history)
+        
+        metadata = {"agent_type": AgentType.ONBOARDING.value}
+        
+        if is_complete:
+            metadata["is_complete"] = True
+            return AgentResponse(
+                content=response_text,
+                metadata=metadata,
+                transition=Transition(AgentType.COORDINATION, get_greeting=True)
+            )
+        
+        return AgentResponse(content=response_text, metadata=metadata)
+    
+    async def get_greeting(self, context: dict = None) -> AgentResponse:
+        """Get the agent's initial greeting."""
+        return AgentResponse(
+            content=(
+                "Hi! I'm your health assistant. I'm here to help you create a personalized "
+                "fitness and nutrition plan. 👋\n\n"
+                "To get started, could you tell me a bit about yourself? "
+                "What are your main health or fitness goals?"
+            ),
+            metadata={"agent_type": AgentType.ONBOARDING.value}
+        )
+    
+    async def _get_llm_response(
+        self,
+        user_message: str,
+        conversation_history: List[Message]
+    ) -> tuple[str, bool]:
+        """
+        Generate a response using AWS Bedrock.
+        
+        Returns:
+            Tuple of (response_text, is_complete)
+        """
+        messages = self._format_messages(conversation_history)
+        
+        try:
+            response_data = self.bedrock.invoke_structured(
+                messages=messages,
+                output_schema=self.response_schema,
+                system_prompt=self.system_prompt,
+                max_tokens=2048,
+                temperature=0.7
+            )
+            
+            # Validate and parse with Pydantic
+            try:
+                parsed_response = OnboardingResponse.model_validate(response_data)
+                conversation_response = parsed_response.response
+                is_complete = parsed_response.is_complete
+                extracted_data = parsed_response.extracted_data.model_dump(exclude_none=True) if parsed_response.extracted_data else None
+            except Exception as e:
+                print(f"Warning: Response validation failed: {str(e)}")
+                conversation_response = response_data.get("response", "")
+                is_complete = response_data.get("is_complete", False)
+                extracted_data = response_data.get("extracted_data")
+            
+            # Save extracted data to database
+            if extracted_data:
+                try:
+                    self._save_extracted_data(extracted_data)
+                except Exception as e:
+                    print(f"Error saving extracted data: {str(e)}")
+            
+            return conversation_response, is_complete
+        
+        except Exception as e:
+            print(f"Error in Bedrock invocation: {str(e)}")
+            return "I'm having a bit of trouble right now. Could you try rephrasing that?", False
     
     def _build_system_prompt(self) -> str:
         """Build system prompt with context about existing user data."""
@@ -106,17 +183,13 @@ COMPLETION DETECTION:
             prompt += "\n- If an existing goal should be updated, include it with its ID and the updated fields"
             prompt += "\n- If it's a new goal, omit the ID (it will be created)"
             prompt += "\n- If the user indicates they no longer want a goal, either omit it or set is_active: false"
-            prompt += "\n- Use semantic understanding to match goals: 'lose weight' and 'get to 180 lbs' are likely the same goal if the user weighs more than 180"
-            prompt += "\n- If the user changes their mind about a goal (e.g., 'actually I want to gain muscle instead'), update the existing goal rather than creating a new one"
+            prompt += "\n- Use semantic understanding to match goals"
         
         return prompt
     
     def _format_messages(self, conversation_history: List[Message]) -> List[Dict[str, str]]:
         """Format conversation history for Bedrock API."""
         messages = []
-        
-        # Keep recent messages (last 10 turns = 20 messages)
-        # For longer conversations, we could summarize older ones
         recent_messages = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
         
         for msg in recent_messages:
@@ -151,18 +224,15 @@ COMPLETION DETECTION:
         if profile_data:
             for key, value in profile_data.items():
                 if value is not None and hasattr(profile, key):
-                    # For additional_context, merge with existing if present
                     if key == "additional_context" and profile.additional_context:
                         if isinstance(profile.additional_context, dict) and isinstance(value, dict):
                             profile.additional_context = {**profile.additional_context, **value}
                         else:
                             profile.additional_context = value
-                    # For arrays (dietary_preferences, workout_preferences, conditions), merge unique values
                     elif key in ["dietary_preferences", "workout_preferences", "conditions"]:
                         if isinstance(value, list):
                             existing = getattr(profile, key) or []
                             if isinstance(existing, list):
-                                # Merge and deduplicate
                                 merged = list(set(existing + value))
                                 setattr(profile, key, merged)
                             else:
@@ -172,10 +242,9 @@ COMPLETION DETECTION:
                     else:
                         setattr(profile, key, value)
         
-        # Handle goals - model returns complete goal state
+        # Handle goals
         goals_data = extracted_data.get("goals", [])
         if goals_data:
-            # Get all existing goal IDs for reference
             existing_goal_ids = {g.id for g in self.existing_goals}
             processed_goal_ids = set()
             
@@ -184,7 +253,6 @@ COMPLETION DETECTION:
                 is_active = goal_data.get("is_active", True)
                 
                 if goal_id and goal_id in existing_goal_ids:
-                    # Update existing goal
                     existing_goal = self._get_goal_by_id(goal_id)
                     if existing_goal:
                         existing_goal.description = goal_data.get("description", existing_goal.description)
@@ -201,7 +269,6 @@ COMPLETION DETECTION:
                         existing_goal.is_active = is_active
                         processed_goal_ids.add(goal_id)
                 elif not goal_id:
-                    # Create new goal
                     try:
                         goal_type = GoalType(goal_data.get("goal_type", "other").lower())
                     except ValueError:
@@ -226,77 +293,13 @@ COMPLETION DETECTION:
                         is_active=is_active
                     )
                     self.db.add(new_goal)
-                    # Add to existing_goals list for future reference
                     self.existing_goals.append(new_goal)
                     processed_goal_ids.add(new_goal.id)
             
-            # Deactivate any existing goals that weren't included in the response
-            # (model decided they should be removed)
             for existing_goal in self.existing_goals:
                 if existing_goal.id not in processed_goal_ids:
                     existing_goal.is_active = False
         
         self.db.commit()
-        # Refresh existing_profile in case it was just created
         self.db.refresh(profile)
         self.existing_profile = profile
-    
-    async def get_response(
-        self,
-        user_message: str,
-        conversation_history: List[Message]
-    ) -> tuple[str, bool]:
-        """
-        Generate a response based on user message and conversation history.
-        
-        Uses AWS Bedrock to generate conversational responses and extract
-        structured data from the conversation.
-        
-        Returns:
-            Tuple of (response_text, is_complete)
-            - response_text: The conversational response
-            - is_complete: True if onboarding is complete, False otherwise
-        """
-        # Format messages for Bedrock
-        messages = self._format_messages(conversation_history)
-        
-        try:
-            # Use structured output for reliable data extraction
-            # This ensures we get both the conversational response and extracted data in one call
-            response_data = self.bedrock.invoke_structured(
-                messages=messages,
-                output_schema=self.response_schema,
-                system_prompt=self.system_prompt,
-                max_tokens=2048,
-                temperature=0.7
-            )
-            
-            # Validate and parse with Pydantic for type safety
-            try:
-                parsed_response = OnboardingResponse.model_validate(response_data)
-                conversation_response = parsed_response.response
-                is_complete = parsed_response.is_complete
-                # Convert Pydantic model to dict for saving
-                extracted_data = parsed_response.extracted_data.model_dump(exclude_none=True) if parsed_response.extracted_data else None
-            except Exception as e:
-                # If validation fails, try to extract what we can (fallback)
-                print(f"Warning: Response validation failed: {str(e)}")
-                conversation_response = response_data.get("response", "")
-                is_complete = response_data.get("is_complete", False)
-                extracted_data = response_data.get("extracted_data")
-            
-            # Save extracted data to database
-            if extracted_data:
-                try:
-                    self._save_extracted_data(extracted_data)
-                except Exception as e:
-                    # Log error but don't fail the response
-                    print(f"Error saving extracted data: {str(e)}")
-            
-            return conversation_response, is_complete
-        
-        except Exception as e:
-            # Fallback response on error
-            print(f"Error in Bedrock invocation: {str(e)}")
-            return "I'm having a bit of trouble right now. Could you try rephrasing that? I'm here to help you create a personalized fitness and nutrition plan!", False
-
