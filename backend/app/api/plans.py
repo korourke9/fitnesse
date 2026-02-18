@@ -22,8 +22,8 @@ async def create_meal_plan(
     return PlanGenerateSummary(
         plan_id=plan.id,
         start_date=plan.start_date,
-        end_date=plan.end_date,
-        duration_days=plan.duration_days,
+        end_date=plan.end_date,  # May be None for ongoing plans
+        duration_days=plan.duration_days,  # May be None
         data=diet if isinstance(diet, dict) else {},
     )
 
@@ -40,8 +40,8 @@ async def create_workout_plan(
     return PlanGenerateSummary(
         plan_id=plan.id,
         start_date=plan.start_date,
-        end_date=plan.end_date,
-        duration_days=plan.duration_days,
+        end_date=plan.end_date,  # May be None for ongoing plans
+        duration_days=plan.duration_days,  # May be None
         data=exercise if isinstance(exercise, dict) else {},
     )
 

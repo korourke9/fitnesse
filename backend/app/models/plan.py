@@ -40,8 +40,8 @@ class Plan(Base):
     # Plan metadata
     name = Column(String, nullable=True)  # e.g., "January 2024 Plan"
     start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-    duration_days = Column(Integer, nullable=False)  # Typically 30 days
+    end_date = Column(Date, nullable=True)  # Nullable - plans are ongoing until replaced
+    duration_days = Column(Integer, nullable=True)  # Deprecated - kept for backwards compatibility
     
     # Plan content (stored as JSON for flexibility)
     # For MEAL plans, this is the diet plan object.

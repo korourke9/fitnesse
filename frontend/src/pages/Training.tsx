@@ -95,7 +95,7 @@ export default function Training() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                   <div className="text-xs text-gray-500">Workouts / week</div>
                   <div className="mt-1 text-lg font-semibold text-gray-900">
@@ -103,15 +103,9 @@ export default function Training() {
                   </div>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Plan length</div>
-                  <div className="mt-1 text-lg font-semibold text-gray-900">
-                    {summary?.duration_days ?? '—'}<span className="text-gray-500 font-normal text-sm"> days</span>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Start → End</div>
+                  <div className="text-xs text-gray-500">Started</div>
                   <div className="mt-1 text-sm font-semibold text-gray-900">
-                    {summary?.start_date ?? '—'} <span className="text-gray-500 font-normal">→</span> {summary?.end_date ?? '—'}
+                    {summary?.start_date ? new Date(summary.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </div>
                 </div>
               </div>

@@ -120,7 +120,6 @@ Return ONLY valid JSON with this structure:
             return existing_plan
         
         start_date = date.today()
-        end_date = start_date + timedelta(days=duration_days - 1)
         
         plan = Plan(
             id=str(uuid.uuid4()),
@@ -128,8 +127,8 @@ Return ONLY valid JSON with this structure:
             plan_type=PlanType.MEAL,
             name=f"{start_date.strftime('%B %Y')} Plan",
             start_date=start_date,
-            end_date=end_date,
-            duration_days=duration_days,
+            end_date=None,  # Plans are ongoing until replaced
+            duration_days=None,  # No longer used
             plan_data={},
             is_active=True,
             is_completed=False

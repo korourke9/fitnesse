@@ -90,8 +90,8 @@ class StateService:
         summary = PlanSummary()
         if plan:
             summary.start_date = plan.start_date
-            summary.end_date = plan.end_date
-            summary.duration_days = plan.duration_days
+            summary.end_date = plan.end_date  # May be None for ongoing plans
+            summary.duration_days = plan.duration_days  # May be None
 
         if plan_type == PlanType.MEAL:
             summary.daily_calories = plan_data.get("daily_calories")

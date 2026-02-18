@@ -58,7 +58,8 @@ class TrainerAgent:
         plan_context = ""
         if workout_plan and isinstance(workout_plan.plan_data, dict):
             pd = workout_plan.plan_data
-            parts = [f"User has an active workout plan (start: {workout_plan.start_date}, end: {workout_plan.end_date})."]
+            end_text = f", end: {workout_plan.end_date}" if workout_plan.end_date else " (ongoing)"
+            parts = [f"User has an active workout plan (start: {workout_plan.start_date}{end_text})."]
             if pd.get("workouts_per_week") is not None:
                 parts.append(f"Target: {pd.get('workouts_per_week')} workouts per week.")
             if pd.get("notes"):

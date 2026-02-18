@@ -60,8 +60,10 @@ export default function ChatContainer({
   const [currentAgent, setCurrentAgent] = useState<AgentType>(initialAgent);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const fetchedConversationIdRef = useRef<string | null>(null);
+  const shouldScrollOnLoadRef = useRef(true);
 
   // Load conversation history when we have a conversationId we haven't fetched yet
   useEffect(() => {
@@ -69,6 +71,7 @@ export default function ChatContainer({
     if (!id || fetchedConversationIdRef.current === id) return;
     fetchedConversationIdRef.current = id;
     setIsLoadingHistory(true);
+    shouldScrollOnLoadRef.current = false; // Don't scroll when loading history
     apiClient
       .get(`/api/chat/conversations/${id}/messages`)
       .then((res) => {
@@ -81,6 +84,7 @@ export default function ChatContainer({
             created_at: m.created_at,
           }))
         );
+        shouldScrollOnLoadRef.current = true; // Re-enable after load
       })
       .catch((err) => {
         fetchedConversationIdRef.current = null;
@@ -88,6 +92,7 @@ export default function ChatContainer({
           localStorage.removeItem(storageKey);
           setConversationId(undefined);
         }
+        shouldScrollOnLoadRef.current = true;
       })
       .finally(() => setIsLoadingHistory(false));
   }, [conversationId]);
@@ -110,12 +115,19 @@ export default function ChatContainer({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll within the messages container, not the whole page
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
+  // Only scroll to bottom when new messages are added (not on initial load)
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (shouldScrollOnLoadRef.current && messages.length > 0 && !isLoadingHistory) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => scrollToBottom(), 100);
+    }
+  }, [messages.length, isLoadingHistory]);
 
   const handleSendMessage = async (message: string) => {
     // Optimistically add user message immediately for better UX
@@ -262,6 +274,7 @@ export default function ChatContainer({
       
       {/* Messages Area - scrollbar theme matches agent */}
       <div
+        ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 bg-gradient-to-br from-gray-50 via-white to-primary-50/30 chat-messages"
         data-chat-theme={currentAgent === 'nutritionist' ? 'green' : currentAgent === 'trainer' ? 'orange' : undefined}
       >

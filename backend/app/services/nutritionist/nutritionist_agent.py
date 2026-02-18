@@ -57,7 +57,8 @@ class NutritionistAgent:
         meal_plan = self.plan_dao.get_active_plan(self.user_id, PlanType.MEAL)
         plan_context = ""
         if meal_plan and isinstance(meal_plan.plan_data, dict):
-            plan_summary = f"User has an active meal plan (start: {meal_plan.start_date}, end: {meal_plan.end_date}). "
+            end_text = f", end: {meal_plan.end_date}" if meal_plan.end_date else " (ongoing)"
+            plan_summary = f"User has an active meal plan (start: {meal_plan.start_date}{end_text}). "
             plan_context = plan_summary
         
         system_prompt = f"""You are a friendly and helpful nutritionist assistant helping users with their meal plans and nutrition tracking.

@@ -112,9 +112,9 @@ export default function Nutrition() {
                   </div>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Plan length</div>
-                  <div className="mt-1 text-lg font-semibold text-gray-900">
-                    {summary?.duration_days ?? '—'}<span className="text-gray-500 font-normal text-sm"> days</span>
+                  <div className="text-xs text-gray-500">Started</div>
+                  <div className="mt-1 text-sm font-semibold text-gray-900">
+                    {summary?.start_date ? new Date(summary.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </div>
                 </div>
               </div>
