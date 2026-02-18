@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.dao import UserDAO, PlanDAO
 from app.models.plan import PlanType
 from app.models.log import Log, LogType
+from app.schemas.plan_data import MealPlanData
 from app.services.bedrock import BedrockService
 from app.services.nutritionist.logging.meal_logging_schema import MealParseResult
 
@@ -23,10 +24,17 @@ class MealLoggingService:
 
     def _require_active_meal_plan(self, user_id: str) -> None:
         plan = self.plan_dao.get_active_plan(user_id, PlanType.MEAL)
-        if not plan or not isinstance(plan.plan_data, dict) or not plan.plan_data:
+        if not plan:
             raise HTTPException(
                 status_code=400,
                 detail="No active meal plan. Generate a meal plan before logging meals.",
+            )
+        try:
+            MealPlanData.from_stored(plan.plan_data)  # Validate plan_data is valid
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Meal plan data is invalid. Please regenerate your meal plan.",
             )
 
     def parse_meal(self, text: str) -> Dict[str, Any]:

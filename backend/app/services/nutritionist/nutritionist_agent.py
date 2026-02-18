@@ -10,6 +10,7 @@ from app.services.bedrock import BedrockService
 from app.services.nutritionist.logging.meal_logging_service import MealLoggingService
 from app.dao import PlanDAO
 from app.models.plan import PlanType
+from app.schemas.plan_data import MealPlanData
 
 
 class NutritionistAgent:
@@ -56,10 +57,18 @@ class NutritionistAgent:
         # Build context about user's meal plan
         meal_plan = self.plan_dao.get_active_plan(self.user_id, PlanType.MEAL)
         plan_context = ""
-        if meal_plan and isinstance(meal_plan.plan_data, dict):
-            end_text = f", end: {meal_plan.end_date}" if meal_plan.end_date else " (ongoing)"
-            plan_summary = f"User has an active meal plan (start: {meal_plan.start_date}{end_text}). "
-            plan_context = plan_summary
+        if meal_plan:
+            try:
+                meal_model = MealPlanData.from_stored(meal_plan.plan_data)
+                end_text = f", end: {meal_plan.end_date}" if meal_plan.end_date else " (ongoing)"
+                plan_summary = f"User has an active meal plan (start: {meal_plan.start_date}{end_text}). "
+                if meal_model.daily_calories:
+                    plan_summary += f"Daily target: {meal_model.daily_calories:.0f} calories. "
+                plan_context = plan_summary
+            except Exception:
+                # Fallback if plan_data is malformed
+                end_text = f", end: {meal_plan.end_date}" if meal_plan.end_date else " (ongoing)"
+                plan_context = f"User has an active meal plan (start: {meal_plan.start_date}{end_text}). "
         
         system_prompt = f"""You are a friendly and helpful nutritionist assistant helping users with their meal plans and nutrition tracking.
 

@@ -1,11 +1,14 @@
 """Training domain service (deterministic APIs)."""
+from datetime import date
+from typing import Any, Dict
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.dao import UserDAO, UserProfileDAO, GoalDAO, PlanDAO
-from app.models.plan import Plan
+from app.models.plan import Plan, PlanType
+from app.schemas.plan_data import WorkoutPlanData
 from app.services.plan_generation import WorkoutPlanGenerator
-from app.models.plan import PlanType
 
 
 class TrainingService:
@@ -32,13 +35,35 @@ class TrainingService:
         self._require_onboarding_complete(user.id)
 
         existing = self.plan_dao.get_active_plan(user.id, PlanType.WORKOUT)
-        if existing and isinstance(existing.plan_data, dict) and existing.plan_data:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Active workout plan already exists (plan_id={existing.id}). Use plan update/feedback instead of creating a new plan.",
-            )
+        if existing:
+            try:
+                WorkoutPlanData.from_stored(existing.plan_data)  # Validate plan exists and is valid
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Active workout plan already exists (plan_id={existing.id}). Use plan update/feedback instead of creating a new plan.",
+                )
+            except (ValueError, TypeError, KeyError):
+                # Plan exists but data is invalid - allow regeneration
+                pass
 
         generator = WorkoutPlanGenerator(db=self.db, user_id=user.id)
         return await generator.generate(duration_days=duration_days)
 
+    def get_today_view_for_plan(self, plan: Plan, view_date: date) -> Dict[str, Any]:
+        """Build today's workout view from the plan's canonical data (no fallback logic)."""
+        model = WorkoutPlanData.from_stored(plan.plan_data)
+        day_num = view_date.weekday() + 1  # 1=Monday .. 7=Sunday
+        day_workout = next((d for d in model.weekly_schedule if d.day == day_num), None)
+        if day_workout:
+            workout = {"type": day_workout.type, "description": day_workout.description}
+            exercises = list(day_workout.exercises)
+        else:
+            workout = {"type": "Rest or light activity", "description": "Listen to your body."}
+            exercises = []
+        return {
+            "date": view_date.isoformat(),
+            "plan_type": PlanType.WORKOUT.value,
+            "workout": workout,
+            "exercises": exercises,
+        }
 

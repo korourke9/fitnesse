@@ -1,12 +1,15 @@
 """Meal plan generation service using AWS Bedrock."""
 import uuid
-from datetime import date, timedelta
-from typing import Dict, Any, Optional
+from datetime import date
 from sqlalchemy.orm import Session
 
 from app.models.plan import Plan, PlanType
 from app.models.goal import GoalType
+from app.schemas.plan_data import MealPlanData
 from app.services.plan_generation.base import BasePlanGenerator
+
+# Schema for Bedrock structured output: LLM must return JSON matching this shape
+MEAL_PLAN_OUTPUT_SCHEMA = MealPlanData.model_json_schema(mode="serialization")
 
 
 class MealPlanGenerator(BasePlanGenerator):
@@ -60,53 +63,13 @@ Create a detailed, personalized nutrition plan that includes:
    - Practical given cooking time and budget constraints
    - Aligned with their goals
 
-5. **Sample Meals** (2-3 options for each meal type):
-   - Respect dietary preferences
-   - Consider cooking time constraints
-   - Budget-appropriate suggestions
+5. **Weekly Schedule**: Day-by-day meal plan for the week
+   - Provide meals for all 7 days (day 1 = Monday, day 7 = Sunday)
+   - Each day should include breakfast, lunch, dinner, and optionally snacks
+   - Vary meals across the week for variety and nutrition balance
+   - Respect dietary preferences and cooking constraints
 
-6. **Plan Notes**: Explain why this plan fits their specific goals and situation
-
-Return ONLY valid JSON with this structure:
-{{
-  "daily_calories": <number>,
-  "macros": {{
-    "protein": <grams>,
-    "carbs": <grams>,
-    "fat": <grams>
-  }},
-  "meals_per_day": <number>,
-  "guidelines": ["guideline 1", "guideline 2", ...],
-  "sample_meals": {{
-    "breakfast": ["option 1", "option 2"],
-    "lunch": ["option 1", "option 2"],
-    "dinner": ["option 1", "option 2"],
-    "snacks": ["option 1", "option 2"]
-  }},
-  "notes": "Personalized explanation"
-}}"""
-    
-    def _get_fallback_plan(self) -> Dict[str, Any]:
-        """Get fallback meal plan if generation fails."""
-        return {
-            "daily_calories": 2000,
-            "macros": {"protein": 150, "carbs": 200, "fat": 65},
-            "meals_per_day": 3,
-            "guidelines": [
-                "Eat balanced meals with protein, carbs, and healthy fats",
-                "Stay hydrated - aim for 8 glasses of water daily",
-                "Include vegetables with every meal",
-                "Plan meals ahead to stay on track",
-                "Listen to hunger cues and eat mindfully"
-            ],
-            "sample_meals": {
-                "breakfast": ["Oatmeal with berries and nuts", "Eggs with whole grain toast"],
-                "lunch": ["Grilled chicken salad", "Quinoa bowl with vegetables"],
-                "dinner": ["Baked salmon with roasted vegetables", "Lean protein with brown rice"],
-                "snacks": ["Greek yogurt", "Apple with almond butter"]
-            },
-            "notes": "A balanced nutrition plan to support your health goals. Adjust portions based on your hunger and energy levels."
-        }
+6. **Plan Notes**: Explain why this plan fits their specific goals and situation"""
     
     def _get_or_create_plan(self, duration_days: int = 30) -> Plan:
         """Get existing active plan or create a new one."""
@@ -117,7 +80,14 @@ Return ONLY valid JSON with this structure:
         ).first()
         
         if existing_plan:
-            return existing_plan
+            # Validate existing plan_data is valid
+            try:
+                MealPlanData.from_stored(existing_plan.plan_data)
+            except Exception:
+                # If plan_data is invalid, treat as if no plan exists (will regenerate)
+                pass
+            else:
+                return existing_plan
         
         start_date = date.today()
         
@@ -153,28 +123,21 @@ Return ONLY valid JSON with this structure:
         plan = self._get_or_create_plan(duration_days)
         
         prompt = self._build_prompt()
+        messages = [{"role": "user", "content": prompt}]
+        system_prompt = (
+            "You are an expert nutritionist. Create a personalized meal plan. "
+            "Your response must be valid JSON that matches the required schema exactly."
+        )
         
-        messages = [{
-            "role": "user",
-            "content": prompt
-        }]
-        
-        try:
-            response = await self.bedrock.invoke(
-                messages=messages,
-                system_prompt="You are an expert nutritionist. Respond with valid JSON only, no markdown or explanation.",
-                max_tokens=2048,
-                temperature=0.7
-            )
-            
-            meal_plan_data = self._parse_json_response(response)
-            
-        except Exception as e:
-            print(f"Error generating meal plan: {str(e)}")
-            meal_plan_data = self._get_fallback_plan()
-        
-        # Update plan with meal plan data
-        plan.plan_data = meal_plan_data
+        result = self.bedrock.invoke_structured(
+            messages=messages,
+            output_schema=MEAL_PLAN_OUTPUT_SCHEMA,
+            system_prompt=system_prompt,
+            max_tokens=4096,
+            temperature=0.5,
+        )
+        canonical = MealPlanData.model_validate(result)
+        plan.plan_data = canonical.model_dump(mode="json")
         
         self.db.commit()
         self.db.refresh(plan)

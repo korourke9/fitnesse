@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.dao import UserDAO, PlanDAO
 from app.models.plan import PlanType
 from app.models.log import Log, LogType
+from app.schemas.plan_data import WorkoutPlanData
 from app.services.bedrock import BedrockService
 from app.services.trainer.logging.workout_logging_schema import WorkoutParseResult
 
@@ -23,10 +24,17 @@ class WorkoutLoggingService:
 
     def _require_active_workout_plan(self, user_id: str) -> None:
         plan = self.plan_dao.get_active_plan(user_id, PlanType.WORKOUT)
-        if not plan or not isinstance(plan.plan_data, dict) or not plan.plan_data:
+        if not plan:
             raise HTTPException(
                 status_code=400,
                 detail="No active workout plan. Generate a workout plan before logging workouts.",
+            )
+        try:
+            WorkoutPlanData.from_stored(plan.plan_data)  # Validate plan_data is valid
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Workout plan data is invalid. Please regenerate your workout plan.",
             )
 
     def parse_workout(self, text: str) -> Dict[str, Any]:

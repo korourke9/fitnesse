@@ -1,11 +1,14 @@
 """Nutrition domain service (deterministic APIs)."""
+from datetime import date
+from typing import Any, Dict
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.dao import UserDAO, UserProfileDAO, GoalDAO, PlanDAO
-from app.models.plan import Plan
+from app.models.plan import Plan, PlanType
+from app.schemas.plan_data import MealPlanData
 from app.services.plan_generation import MealPlanGenerator
-from app.models.plan import PlanType
 
 
 class NutritionService:
@@ -32,13 +35,38 @@ class NutritionService:
         self._require_onboarding_complete(user.id)
 
         existing = self.plan_dao.get_active_plan(user.id, PlanType.MEAL)
-        if existing and isinstance(existing.plan_data, dict) and existing.plan_data:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Active meal plan already exists (plan_id={existing.id}). Use plan update/feedback instead of creating a new plan.",
-            )
+        if existing:
+            try:
+                MealPlanData.from_stored(existing.plan_data)  # Validate plan exists and is valid
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Active meal plan already exists (plan_id={existing.id}). Use plan update/feedback instead of creating a new plan.",
+                )
+            except (ValueError, TypeError, KeyError):
+                # Plan exists but data is invalid - allow regeneration
+                pass
 
         generator = MealPlanGenerator(db=self.db, user_id=user.id)
         return await generator.generate(duration_days=duration_days)
 
+    def get_today_view_for_plan(self, plan: Plan, view_date: date) -> Dict[str, Any]:
+        """Build today's meal view from the plan's canonical data (no fallback logic)."""
+        model = MealPlanData.from_stored(plan.plan_data)
+        day_num = view_date.weekday() + 1  # 1=Monday .. 7=Sunday
+        day_meals = next((d for d in model.weekly_schedule if d.day == day_num), None)
+        meals = []
+        if day_meals:
+            meals = [
+                {"meal_type": m.meal_type, "name": m.name, "nutrition": m.nutrition}
+                for m in day_meals.meals
+            ]
+        return {
+            "date": view_date.isoformat(),
+            "plan_type": PlanType.MEAL.value,
+            "targets": {
+                "daily_calories": model.daily_calories,
+                "macros": model.macros,
+            },
+            "meals": meals,
+        }
 

@@ -153,8 +153,16 @@ class CoordinationAgent:
                 context_parts.append(f"- {goal.description} (target: {goal.target})")
         
         context_parts.append("\nPlan Status:")
-        has_meal_plan = bool(active_meal_plan and isinstance(active_meal_plan.plan_data, dict) and active_meal_plan.plan_data)
-        has_workout_plan = bool(active_workout_plan and isinstance(active_workout_plan.plan_data, dict) and active_workout_plan.plan_data)
+        # Use models to check plan validity
+        from app.schemas.plan_data import MealPlanData, WorkoutPlanData
+        try:
+            has_meal_plan = bool(active_meal_plan and MealPlanData.from_stored(active_meal_plan.plan_data))
+        except Exception:
+            has_meal_plan = False
+        try:
+            has_workout_plan = bool(active_workout_plan and WorkoutPlanData.from_stored(active_workout_plan.plan_data))
+        except Exception:
+            has_workout_plan = False
         
         if has_meal_plan:
             context_parts.append("- ✅ Meal plan: CREATED - user can log meals with nutritionist")

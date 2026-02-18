@@ -10,6 +10,7 @@ from app.services.bedrock import BedrockService
 from app.services.trainer.logging.workout_logging_service import WorkoutLoggingService
 from app.dao import PlanDAO
 from app.models.plan import PlanType
+from app.schemas.plan_data import WorkoutPlanData
 
 
 class TrainerAgent:
@@ -56,15 +57,20 @@ class TrainerAgent:
         # Build context about user's workout plan so the LLM can reference it
         workout_plan = self.plan_dao.get_active_plan(self.user_id, PlanType.WORKOUT)
         plan_context = ""
-        if workout_plan and isinstance(workout_plan.plan_data, dict):
-            pd = workout_plan.plan_data
-            end_text = f", end: {workout_plan.end_date}" if workout_plan.end_date else " (ongoing)"
-            parts = [f"User has an active workout plan (start: {workout_plan.start_date}{end_text})."]
-            if pd.get("workouts_per_week") is not None:
-                parts.append(f"Target: {pd.get('workouts_per_week')} workouts per week.")
-            if pd.get("notes"):
-                parts.append(f"Notes: {pd.get('notes')}")
-            plan_context = " ".join(parts) + "\n\n"
+        if workout_plan:
+            try:
+                workout_model = WorkoutPlanData.from_stored(workout_plan.plan_data)
+                end_text = f", end: {workout_plan.end_date}" if workout_plan.end_date else " (ongoing)"
+                parts = [f"User has an active workout plan (start: {workout_plan.start_date}{end_text})."]
+                if workout_model.workouts_per_week is not None:
+                    parts.append(f"Target: {workout_model.workouts_per_week} workouts per week.")
+                if workout_model.notes:
+                    parts.append(f"Notes: {workout_model.notes}")
+                plan_context = " ".join(parts) + "\n\n"
+            except Exception:
+                # Fallback if plan_data is malformed
+                end_text = f", end: {workout_plan.end_date}" if workout_plan.end_date else " (ongoing)"
+                plan_context = f"User has an active workout plan (start: {workout_plan.start_date}{end_text}).\n\n"
 
         system_prompt = f"""You are a friendly personal trainer. Reply directly to what the user said. Do NOT respond with a generic menu like "You can: Log workouts / Ask questions / Give feedback" or "What would you like to do?" — only give that if they literally ask "what can you do?" or "help".
 

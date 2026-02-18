@@ -11,6 +11,27 @@ export interface PlanSummary {
   notes?: string;
 }
 
+/** Response from GET /api/plans/:id/view?date= */
+export interface PlanViewMeal {
+  meal_type: string;
+  name: string;
+  nutrition?: Record<string, unknown> | null;
+}
+
+export interface PlanViewWorkout {
+  type: string;
+  description: string;
+}
+
+export interface PlanViewResponse {
+  date: string;
+  plan_type: string;
+  targets?: { daily_calories?: number; macros?: Record<string, unknown> } | null;
+  meals?: PlanViewMeal[];
+  workout?: PlanViewWorkout | null;
+  exercises?: string[];
+}
+
 export interface SectionState {
   has_plan: boolean;
   plan_id?: string | null;

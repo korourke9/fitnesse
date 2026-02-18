@@ -1,11 +1,12 @@
 """Service for returning application state to the frontend."""
-from typing import Any, Dict, Optional
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.dao import UserDAO, PlanDAO, GoalDAO, UserProfileDAO
 from app.api.schemas.state import AppStateResponse, SectionState, PlanSummary
 from app.models.plan import PlanType
 from app.models.log import Log, LogType
+from app.schemas.plan_data import MealPlanData, WorkoutPlanData
 
 
 class StateService:
@@ -28,15 +29,26 @@ class StateService:
 
         onboarding_complete = bool(goals) and bool(profile)
 
-        meal_data: Dict[str, Any] = (
-            active_meal_plan.plan_data if (active_meal_plan and isinstance(active_meal_plan.plan_data, dict)) else {}
-        )
-        workout_data: Dict[str, Any] = (
-            active_workout_plan.plan_data if (active_workout_plan and isinstance(active_workout_plan.plan_data, dict)) else {}
-        )
+        # Load plan models (handles legacy data via from_stored)
+        # Gracefully handle invalid plan_data by treating as no plan
+        meal_model = None
+        if active_meal_plan:
+            try:
+                meal_model = MealPlanData.from_stored(active_meal_plan.plan_data)
+            except Exception:
+                # Invalid plan_data - treat as if no plan exists
+                pass
+        
+        workout_model = None
+        if active_workout_plan:
+            try:
+                workout_model = WorkoutPlanData.from_stored(active_workout_plan.plan_data)
+            except Exception:
+                # Invalid plan_data - treat as if no plan exists
+                pass
 
-        nutrition_summary = self._build_plan_summary(active_meal_plan, plan_data=meal_data, plan_type=PlanType.MEAL)
-        training_summary = self._build_plan_summary(active_workout_plan, plan_data=workout_data, plan_type=PlanType.WORKOUT)
+        nutrition_summary = self._build_plan_summary(active_meal_plan, meal_model)
+        training_summary = self._build_plan_summary_workout(active_workout_plan, workout_model)
 
         recent_checkins = (
             self.db.query(Log)
@@ -51,14 +63,14 @@ class StateService:
             user_id=user.id,
             onboarding_complete=onboarding_complete,
             nutrition=SectionState(
-                has_plan=bool(active_meal_plan and meal_data),
-                plan_id=active_meal_plan.id if (active_meal_plan and meal_data) else None,
-                summary=nutrition_summary if (active_meal_plan and meal_data) else None,
+                has_plan=meal_model is not None,
+                plan_id=active_meal_plan.id if active_meal_plan else None,
+                summary=nutrition_summary if meal_model else None,
             ),
             training=SectionState(
-                has_plan=bool(active_workout_plan and workout_data),
-                plan_id=active_workout_plan.id if (active_workout_plan and workout_data) else None,
-                summary=training_summary if (active_workout_plan and workout_data) else None,
+                has_plan=workout_model is not None,
+                plan_id=active_workout_plan.id if active_workout_plan else None,
+                summary=training_summary if workout_model else None,
             ),
             goals=[
                 {
@@ -84,24 +96,41 @@ class StateService:
     def _build_plan_summary(
         self,
         plan,
-        plan_data: Dict[str, Any],
-        plan_type: PlanType,
-    ) -> PlanSummary:
+        plan_model: Optional[MealPlanData],
+    ) -> Optional[PlanSummary]:
+        """Build meal plan summary from plan model. Returns None if no model provided."""
+        if not plan_model:
+            return None
+
         summary = PlanSummary()
         if plan:
             summary.start_date = plan.start_date
             summary.end_date = plan.end_date  # May be None for ongoing plans
             summary.duration_days = plan.duration_days  # May be None
 
-        if plan_type == PlanType.MEAL:
-            summary.daily_calories = plan_data.get("daily_calories")
-            summary.macros = plan_data.get("macros")
-        elif plan_type == PlanType.WORKOUT:
-            summary.workouts_per_week = plan_data.get("workouts_per_week")
+        summary.daily_calories = plan_model.daily_calories
+        summary.macros = plan_model.macros
+        summary.notes = plan_model.notes
 
-        notes = plan_data.get("notes")
-        if isinstance(notes, str):
-            summary.notes = notes
+        return summary
+
+    def _build_plan_summary_workout(
+        self,
+        plan,
+        plan_model: Optional[WorkoutPlanData],
+    ) -> Optional[PlanSummary]:
+        """Build workout plan summary from plan model. Returns None if no model provided."""
+        if not plan_model:
+            return None
+
+        summary = PlanSummary()
+        if plan:
+            summary.start_date = plan.start_date
+            summary.end_date = plan.end_date  # May be None for ongoing plans
+            summary.duration_days = plan.duration_days  # May be None
+
+        summary.workouts_per_week = plan_model.workouts_per_week
+        summary.notes = plan_model.notes
 
         return summary
 
