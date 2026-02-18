@@ -5,6 +5,6 @@ from app.models.message import Message
 from app.models.user_profile import UserProfile
 from app.models.goal import Goal, GoalType
 from app.models.plan import Plan, PlanItem
-from app.models.meal_log import MealLog
+from app.models.log import Log, LogType
 
-__all__ = ["User", "Conversation", "Message", "AgentType", "UserProfile", "Goal", "GoalType", "Plan", "PlanItem", "MealLog"]
+__all__ = ["User", "Conversation", "Message", "AgentType", "UserProfile", "Goal", "GoalType", "Plan", "PlanItem", "Log", "LogType"]

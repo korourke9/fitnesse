@@ -7,7 +7,14 @@ from app.api.schemas.chat import (
     ChatResponse,
 )
 from app.api.schemas.state import AppStateResponse, SectionState, PlanSummary
-from app.api.schemas.logs import MealParseRequest, MealParseResponse, MealLogCreateRequest, MealLogResponse
+from app.api.schemas.logs import (
+    MealParseRequest,
+    MealParseResponse,
+    MealLogCreateRequest,
+    MealLogResponse,
+    GoalCheckInCreateRequest,
+    GoalCheckInResponse,
+)
 
 __all__ = [
     "MessageCreate",
@@ -22,5 +29,7 @@ __all__ = [
     "MealParseResponse",
     "MealLogCreateRequest",
     "MealLogResponse",
+    "GoalCheckInCreateRequest",
+    "GoalCheckInResponse",
 ]
 

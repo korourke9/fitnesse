@@ -114,7 +114,7 @@ class OnboardingAgent:
         
         except Exception as e:
             print(f"Error in Bedrock invocation: {str(e)}")
-            return "I'm having a bit of trouble right now. Could you try rephrasing that?", False
+            return "I'm having a quick connection hiccup. Ask me again in a moment.", False
     
     def _build_system_prompt(self) -> str:
         """Build system prompt with context about existing user data."""

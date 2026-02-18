@@ -3,10 +3,37 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.dao import ConversationDAO, MessageDAO
 from app.api.schemas.chat import ChatRequest, ChatResponse, MessageResponse
 from app.services.chat import ChatService
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+
+@router.get("/chat/conversations/{conversation_id}/messages")
+async def get_conversation_messages(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+):
+    """Return all messages for a conversation (for loading history)."""
+    conversation_dao = ConversationDAO(db)
+    message_dao = MessageDAO(db)
+    conversation = conversation_dao.get_by_id(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    messages = message_dao.get_by_conversation(conversation_id)
+    return {
+        "conversation_id": conversation_id,
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content or "",
+                "created_at": m.created_at,
+            }
+            for m in messages
+        ],
+    }
 
 
 @router.post("/chat", response_model=ChatResponse)

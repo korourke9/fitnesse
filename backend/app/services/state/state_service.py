@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.dao import UserDAO, PlanDAO, GoalDAO, UserProfileDAO
 from app.api.schemas.state import AppStateResponse, SectionState, PlanSummary
 from app.models.plan import PlanType
+from app.models.log import Log, LogType
 
 
 class StateService:
@@ -37,6 +38,15 @@ class StateService:
         nutrition_summary = self._build_plan_summary(active_meal_plan, plan_data=meal_data, plan_type=PlanType.MEAL)
         training_summary = self._build_plan_summary(active_workout_plan, plan_data=workout_data, plan_type=PlanType.WORKOUT)
 
+        recent_checkins = (
+            self.db.query(Log)
+            .filter(Log.user_id == user.id)
+            .filter(Log.log_type == LogType.GOAL_CHECKIN)
+            .order_by(Log.logged_at.desc())
+            .limit(5)
+            .all()
+        )
+
         return AppStateResponse(
             user_id=user.id,
             onboarding_complete=onboarding_complete,
@@ -50,6 +60,25 @@ class StateService:
                 plan_id=active_workout_plan.id if (active_workout_plan and workout_data) else None,
                 summary=training_summary if (active_workout_plan and workout_data) else None,
             ),
+            goals=[
+                {
+                    "id": g.id,
+                    "goal_type": g.goal_type.value,
+                    "description": g.description,
+                    "target": g.target,
+                    "target_value": g.target_value,
+                    "target_date": g.target_date.isoformat() if g.target_date else None,
+                }
+                for g in goals
+            ],
+            recent_goal_checkins=[
+                {
+                    "id": c.id,
+                    "text": c.raw_text,
+                    "logged_at": c.logged_at.isoformat(),
+                }
+                for c in recent_checkins
+            ],
         )
 
     def _build_plan_summary(

@@ -1,5 +1,6 @@
 """Chat service for orchestrating agent interactions."""
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,12 @@ from app.models.conversation import AgentType
 from app.dao import UserDAO, ConversationDAO, MessageDAO
 from app.services.chat.agent_router import AgentRouter
 from app.services.agents import AgentResponse
+from app.services.bedrock import BedrockService
+from app.services.nutritionist.logging.meal_logging_service import MealLoggingService
+from app.services.trainer.logging.workout_logging_service import WorkoutLoggingService
+
+# Phrase we put in assistant messages when asking user to confirm a log; used to detect "confirm?" context
+CONFIRM_PROMPT_MARKER = "reply *yes* to save"
 
 
 @dataclass
@@ -35,41 +42,79 @@ class ChatService:
         agent_type: Optional[str] = None
     ) -> ChatResult:
         """
-        Process a chat message through the appropriate agent.
-        
-        Args:
-            message: The user's message
-            conversation_id: Optional existing conversation ID
-            agent_type: Optional agent type override
-            
-        Returns:
-            ChatResult with conversation info and messages
+        Process a chat message. Uses conversation history + low-temp LLM to detect
+        when the user is confirming a suggested meal/workout log; then re-parses
+        the previous user message and saves. No pending state on the server.
         """
-        # Get or create user and conversation
         user = self.user_dao.get_or_create_temp_user()
         conversation = self.conversation_dao.get_or_create(user.id, conversation_id)
-        
-        # Save user message
         user_message = self.message_dao.create(conversation.id, "user", message)
-        
-        # Handle agent type override from frontend
         if agent_type:
             self._update_agent_if_valid(conversation, agent_type)
-        
-        # Get conversation history
+
         history = self.message_dao.get_by_conversation(conversation.id)
-        
-        # Process message with current agent
+        # Check if this might be a "confirm" reply: last assistant message was our confirm prompt
+        if (
+            conversation.agent_type in (AgentType.NUTRITIONIST, AgentType.TRAINER)
+            and len(history) >= 3
+        ):
+            last_user = history[-1]
+            last_assistant = history[-2]
+            prev_user = history[-3]
+            if (
+                last_user.role == "user"
+                and last_assistant.role == "assistant"
+                and prev_user.role == "user"
+                and (CONFIRM_PROMPT_MARKER in (last_assistant.content or "").lower())
+            ):
+                log_kind = "meal" if conversation.agent_type == AgentType.NUTRITIONIST else "workout"
+                confirmed = await self._llm_user_confirmed_save(
+                    last_assistant.content or "",
+                    last_user.content or "",
+                    log_kind=log_kind
+                )
+                if confirmed:
+                    text_to_parse = (prev_user.content or "").strip()
+                    if text_to_parse:
+                        try:
+                            logged_at = datetime.now(timezone.utc)
+                            if log_kind == "meal":
+                                svc = MealLoggingService(self.db)
+                                parsed = svc.parse_meal(text_to_parse)
+                                confirmed_data = parsed if isinstance(parsed, dict) else {}
+                                svc.save_meal_log(text_to_parse, parsed, confirmed_data, logged_at=logged_at)
+                            else:
+                                svc = WorkoutLoggingService(self.db)
+                                parsed = svc.parse_workout(text_to_parse)
+                                confirmed_data = parsed if isinstance(parsed, dict) else {}
+                                svc.save_workout_log(text_to_parse, parsed, confirmed_data, logged_at=logged_at)
+                            assistant_message = self.message_dao.create(
+                                conversation.id, "assistant", "Saved! Anything else you'd like to log or ask?"
+                            )
+                            return ChatResult(
+                                conversation_id=conversation.id,
+                                user_message=user_message,
+                                assistant_message=assistant_message,
+                                metadata={"agent_type": conversation.agent_type.value}
+                            )
+                        except Exception as e:
+                            assistant_message = self.message_dao.create(
+                                conversation.id, "assistant", f"Something went wrong saving that: {str(e)}. Try describing it again."
+                            )
+                            return ChatResult(
+                                conversation_id=conversation.id,
+                                user_message=user_message,
+                                assistant_message=assistant_message,
+                                metadata={"agent_type": conversation.agent_type.value}
+                            )
+
         router = AgentRouter(self.db, user.id)
         response = await self._process_with_transitions(
             router, conversation, message, history
         )
-        
-        # Save assistant message
         assistant_message = self.message_dao.create(
             conversation.id, "assistant", response.content
         )
-        
         return ChatResult(
             conversation_id=conversation.id,
             user_message=user_message,
@@ -134,3 +179,36 @@ class ChatService:
                 self.conversation_dao.update_agent_type(conversation, requested_agent)
         except ValueError:
             pass  # Ignore invalid agent types
+
+    async def _llm_user_confirmed_save(
+        self, last_assistant_content: str, user_reply: str, log_kind: str
+    ) -> bool:
+        """Use low-temp LLM to decide if the user's reply confirms they want to save the suggested log."""
+        schema = {
+            "type": "object",
+            "properties": {"confirmed": {"type": "boolean"}},
+            "required": ["confirmed"],
+        }
+        system = (
+            "You determine whether the user confirmed they want to save a suggested log. "
+            "Reply with JSON only: {\"confirmed\": true} or {\"confirmed\": false}. "
+            "Treat as confirmed if they agree to save (e.g. yes, yep, save it, looks good, correct). "
+            "Treat as not confirmed if they are correcting the log, asking a question, or declining."
+        )
+        content = (
+            f"Assistant had just suggested a {log_kind} and asked the user to confirm. "
+            f"Assistant said:\n{last_assistant_content}\n\nUser replied: {user_reply}\n\n"
+            "Did the user confirm they want to save this log?"
+        )
+        try:
+            bedrock = BedrockService()
+            out = bedrock.invoke_structured(
+                messages=[{"role": "user", "content": content}],
+                output_schema=schema,
+                system_prompt=system,
+                max_tokens=64,
+                temperature=0.1,
+            )
+            return bool(out.get("confirmed"))
+        except Exception:
+            return False

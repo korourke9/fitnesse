@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.dao import UserDAO, PlanDAO
 from app.models.plan import PlanType
-from app.models.meal_log import MealLog
+from app.models.log import Log, LogType
 from app.services.bedrock import BedrockService
 from app.services.nutritionist.logging.meal_logging_schema import MealParseResult
 
@@ -68,15 +68,16 @@ class MealLoggingService:
         parsed_data: Optional[Dict[str, Any]],
         confirmed_data: Dict[str, Any],
         logged_at: Optional[datetime] = None,
-    ) -> MealLog:
+    ) -> Log:
         user = self.user_dao.get_or_create_temp_user()
         self._require_active_meal_plan(user.id)
 
         if logged_at is None:
             logged_at = datetime.now(timezone.utc)
 
-        log = MealLog(
+        log = Log(
             user_id=user.id,
+            log_type=LogType.MEAL,
             raw_text=raw_text,
             parsed_data=parsed_data,
             confirmed_data=confirmed_data,

@@ -112,7 +112,7 @@ class CoordinationAgent:
             import traceback
             traceback.print_exc()
             return (
-                "I'm here to help! Would you like to generate a meal plan or workout plan?",
+                "I'm having a quick connection hiccup. Ask me again in a moment.",
                 None,
                 None
             )

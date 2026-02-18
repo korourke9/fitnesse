@@ -1,6 +1,6 @@
 """State-related schemas."""
-from datetime import date
-from typing import Optional, Dict, Any
+from datetime import date, datetime
+from typing import Optional, Dict, Any, List
 
 from pydantic import BaseModel
 
@@ -28,5 +28,7 @@ class AppStateResponse(BaseModel):
     onboarding_complete: bool
     nutrition: SectionState
     training: SectionState
+    goals: List[Dict[str, Any]] = []
+    recent_goal_checkins: List[Dict[str, Any]] = []
 
 

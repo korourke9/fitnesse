@@ -3,6 +3,13 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { apiClient } from '../../lib/api';
 
+const STORAGE_KEYS: Record<AgentType, string> = {
+  onboarding: 'fitnesse_chat_onboarding_id',
+  coordination: 'fitnesse_chat_coordination_id',
+  nutritionist: 'fitnesse_chat_nutrition_id',
+  trainer: 'fitnesse_chat_training_id',
+};
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -18,6 +25,8 @@ interface ChatContainerProps {
   onMetadata?: (metadata: unknown) => void;
   showAgentSwitcher?: boolean;
   initialAgent?: AgentType;
+  /** When true, do not change agent from server metadata (e.g. stay on nutritionist/trainer; redirect via links only). */
+  lockAgent?: boolean;
 }
 
 const agentInfo: Record<AgentType, { title: string; icon: string; color: string; description: string }> = {
@@ -35,14 +44,53 @@ export default function ChatContainer({
   onMetadata,
   showAgentSwitcher = true,
   initialAgent = 'onboarding',
+  lockAgent = false,
 }: ChatContainerProps) {
+  const storageKey = STORAGE_KEYS[initialAgent];
   const [messages, setMessages] = useState<Message[]>([]);
-  const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  const [conversationId, setConversationId] = useState<string | undefined>(() => {
+    if (initialConversationId) return initialConversationId;
+    if (typeof window !== 'undefined' && storageKey) {
+      return localStorage.getItem(storageKey) ?? undefined;
+    }
+    return undefined;
+  });
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<AgentType>(initialAgent);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const fetchedConversationIdRef = useRef<string | null>(null);
+
+  // Load conversation history when we have a conversationId we haven't fetched yet
+  useEffect(() => {
+    const id = conversationId;
+    if (!id || fetchedConversationIdRef.current === id) return;
+    fetchedConversationIdRef.current = id;
+    setIsLoadingHistory(true);
+    apiClient
+      .get(`/api/chat/conversations/${id}/messages`)
+      .then((res) => {
+        const list = res.data?.messages ?? [];
+        setMessages(
+          list.map((m: { id: string; role: string; content: string; created_at: string }) => ({
+            id: m.id,
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            created_at: m.created_at,
+          }))
+        );
+      })
+      .catch((err) => {
+        fetchedConversationIdRef.current = null;
+        if (err.response?.status === 404 && storageKey && typeof window !== 'undefined') {
+          localStorage.removeItem(storageKey);
+          setConversationId(undefined);
+        }
+      })
+      .finally(() => setIsLoadingHistory(false));
+  }, [conversationId]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -92,15 +140,19 @@ export default function ChatContainer({
       const { conversation_id, user_message, assistant_message, metadata } = response.data;
       onMetadata?.(metadata);
       
-      // Update current agent if it changed
-      if (metadata?.agent_type) {
+      // Update current agent if it changed (unless lockAgent: redirect via links only)
+      if (!lockAgent && metadata?.agent_type) {
         setCurrentAgent(metadata.agent_type as AgentType);
       }
 
-      // Update conversation ID if this is a new conversation
+      // Update conversation ID if this is a new conversation; persist for this agent
       if (!conversationId && conversation_id) {
         setConversationId(conversation_id);
         onConversationStart?.(conversation_id);
+        const key = STORAGE_KEYS[currentAgent];
+        if (key && typeof window !== 'undefined') {
+          localStorage.setItem(key, conversation_id);
+        }
       }
 
       // Replace optimistic message with real messages from server
@@ -126,9 +178,9 @@ export default function ChatContainer({
       });
     } catch (error) {
       console.error('Error sending message:', error);
-      // Remove optimistic message on error
       setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessageId));
-      // TODO: Show error message to user
+      const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Something went wrong. Try again.';
+      setMessages((prev) => [...prev, { id: `error-${Date.now()}`, role: 'assistant', content: `⚠️ ${msg}`, created_at: new Date().toISOString() }]);
     } finally {
       setIsLoading(false);
     }
@@ -136,8 +188,8 @@ export default function ChatContainer({
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-soft-lg overflow-hidden border border-gray-100">
-      {/* Chat Header - dynamically shows current agent with dropdown */}
-      <div className={`relative bg-gradient-to-r ${agentInfo[currentAgent].color} px-6 py-4 border-b border-primary-700/20 transition-all duration-300`}>
+      {/* Chat Header - theme matches agent (green=nutritionist, orange=trainer) */}
+      <div className={`relative bg-gradient-to-r ${agentInfo[currentAgent].color} px-6 py-4 border-b border-black/10 transition-all duration-300`}>
         <div className="flex items-center gap-3">
           {showAgentSwitcher ? (
             // Clickable agent icon with dropdown
@@ -208,37 +260,27 @@ export default function ChatContainer({
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
       </div>
       
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 bg-gradient-to-br from-gray-50 via-white to-primary-50/30">
-        {messages.length === 0 && (
+      {/* Messages Area - scrollbar theme matches agent */}
+      <div
+        className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 bg-gradient-to-br from-gray-50 via-white to-primary-50/30 chat-messages"
+        data-chat-theme={currentAgent === 'nutritionist' ? 'green' : currentAgent === 'trainer' ? 'orange' : undefined}
+      >
+        {isLoadingHistory && (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-500 text-sm">Loading conversation...</p>
+          </div>
+        )}
+        {!isLoadingHistory && messages.length === 0 && (
           <div className="flex items-center justify-center h-full animate-fade-in">
             <div className="text-center max-w-md px-4">
-              <div className="relative inline-flex items-center justify-center w-20 h-20 mb-6">
-                {/* Animated rings */}
-                <div className="absolute inset-0 bg-gradient-to-br from-primary-400 to-accent-400 rounded-full opacity-20 animate-ping"></div>
-                <div className="absolute inset-2 bg-gradient-to-br from-primary-500 to-accent-500 rounded-full opacity-30 animate-pulse-slow"></div>
-                <div className="relative w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-soft-lg">
-                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </div>
+              <div className={`relative inline-flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-gradient-to-br ${agentInfo[currentAgent].color} shadow-soft-lg`}>
+                <span className="text-3xl">{agentInfo[currentAgent].icon}</span>
               </div>
-              <h4 className="text-xl font-semibold text-gray-800 mb-2">Welcome to Your Health Journey</h4>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Share your health goals, dietary preferences, exercise habits, biometric data you're comfortable with, cooking budget, or any other information to help me create a personalized plan for you.
+              <p className="text-gray-500 text-sm">
+                {showAgentSwitcher
+                  ? 'Share your goals, preferences, and habits to get started.'
+                  : 'Ask about your plan or give feedback. Type a message below.'}
               </p>
-              
-              {/* Suggested prompts */}
-              <div className="mt-6 flex flex-wrap gap-2 justify-center">
-                {['👋 Say hello', '💪 Fitness tips', '🥗 Nutrition advice'].map((prompt, i) => (
-                  <button
-                    key={i}
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm text-gray-600 hover:border-primary-400 hover:text-primary-600 hover:shadow-soft transition-all duration-200 hover:scale-105"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         )}
@@ -249,17 +291,16 @@ export default function ChatContainer({
               role={message.role}
               content={message.content}
               timestamp={message.created_at}
+              assistantTheme={currentAgent === 'nutritionist' ? 'green' : currentAgent === 'trainer' ? 'orange' : 'primary'}
             />
           ))}
           {isLoading && (
             <div className="flex justify-start message-appear">
               <div className="flex items-end gap-3">
-                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-soft">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                  </svg>
+                <div className={`flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br ${agentInfo[currentAgent].color} flex items-center justify-center shadow-soft`}>
+                  <span className="text-lg">{agentInfo[currentAgent].icon}</span>
                 </div>
-                <div className="bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl rounded-bl-md px-5 py-4 shadow-soft">
+                <div className={`bg-gradient-to-br ${agentInfo[currentAgent].color} rounded-2xl rounded-bl-md px-5 py-4 shadow-soft`}>
                   <div className="flex space-x-2">
                     <div className="w-2.5 h-2.5 bg-white/90 rounded-full typing-dot"></div>
                     <div className="w-2.5 h-2.5 bg-white/90 rounded-full typing-dot"></div>
@@ -273,11 +314,12 @@ export default function ChatContainer({
         <div ref={messagesEndRef} />
       </div>
       
-      {/* Input Area */}
+      {/* Input Area - theme matches agent when single-agent (nutritionist=green, trainer=orange) */}
       <ChatInput 
         onSendMessage={handleSendMessage} 
-        disabled={isLoading}
+        disabled={isLoading || isLoadingHistory}
         placeholder="Type your message..."
+        theme={currentAgent === 'nutritionist' ? 'green' : currentAgent === 'trainer' ? 'orange' : 'primary'}
       />
     </div>
   );

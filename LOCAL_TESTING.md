@@ -66,8 +66,16 @@ You'll still need to:
 
 ## AWS Credentials
 
-Make sure you have AWS credentials configured for Bedrock access:
+Chat agents (Nutritionist, Trainer) and plan generation use AWS Bedrock. Configure credentials first:
 
+**Option A – SSO / temporary credentials (e.g. `aws login`):**
+```bash
+aws login
+# or: aws sso login
+# Restart the backend after logging in. Credentials expire; re-run when you see "session has expired".
+```
+
+**Option B – Long‑lived keys:**
 ```bash
 aws configure
 # Or set environment variables:
@@ -89,10 +97,24 @@ export AWS_REGION=us-east-2
 - Verify `VITE_API_BASE_URL` is not set (should use default `http://localhost:8000`)
 
 ### Bedrock errors
-- Verify AWS credentials are configured
-- Check Bedrock is enabled in your AWS account
-- Verify model ID is correct: `anthropic.claude-3-5-sonnet-20241022-v2:0`
-- Check you have permissions to invoke Bedrock models
+
+**"Your session has expired or credentials have changed. Please reauthenticate using 'aws login'"**
+
+If you use AWS SSO or temporary credentials, they expire. Re-authenticate:
+
+```bash
+aws login
+# or, for SSO:
+aws sso login
+```
+
+Then restart the backend so it picks up the new credentials.
+
+**Other Bedrock issues**
+- Verify AWS credentials: `aws sts get-caller-identity`
+- Check Bedrock is enabled in your AWS account and in the same region as `AWS_REGION`
+- Verify model ID in `.env` or config (e.g. `anthropic.claude-3-5-sonnet-20241022-v2:0`)
+- Ensure your IAM user/role has `bedrock:InvokeModel` (and optional `bedrock:InvokeModelWithResponseStream`) for the model you use
 
 ## Viewing Data
 

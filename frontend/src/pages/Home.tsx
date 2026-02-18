@@ -9,7 +9,7 @@ function Home() {
   useEffect(() => {
     if (isLoading) return;
     const onboardingComplete = data?.onboarding_complete ?? false;
-    navigate(onboardingComplete ? '/dashboard' : '/onboarding', { replace: true });
+    navigate(onboardingComplete ? '/dashboard' : '/goals', { replace: true });
   }, [navigate, data, isLoading]);
 
   return (

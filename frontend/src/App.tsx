@@ -6,6 +6,7 @@ import './App.css';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Onboarding from './pages/Onboarding';
+import Goals from './pages/Goals';
 import Nutrition from './pages/Nutrition';
 import Training from './pages/Training';
 
@@ -26,6 +27,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/goals" element={<Goals />} />
           <Route path="/nutrition" element={<Nutrition />} />
           <Route path="/training" element={<Training />} />
         </Routes>

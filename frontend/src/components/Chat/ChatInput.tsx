@@ -1,16 +1,27 @@
 import { useState, useRef } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 
+type ThemeColor = 'primary' | 'green' | 'orange';
+
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Match send button to agent theme (green=nutritionist, orange=trainer). */
+  theme?: ThemeColor;
 }
+
+const themeClasses: Record<ThemeColor, string> = {
+  primary: 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700',
+  green: 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700',
+  orange: 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700',
+};
 
 export default function ChatInput({ 
   onSendMessage, 
   disabled = false,
-  placeholder = "Type your message..." 
+  placeholder = "Type your message...",
+  theme = 'primary',
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -87,7 +98,7 @@ export default function ChatInput({
           className={`relative px-6 py-3.5 rounded-xl font-medium text-white text-[15px] transition-all duration-300 overflow-hidden group ${
             disabled || !message.trim()
               ? 'bg-gray-300 cursor-not-allowed'
-              : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-soft hover:shadow-lg hover:scale-105 active:scale-95'
+              : `${themeClasses[theme]} shadow-soft hover:shadow-lg hover:scale-105 active:scale-95`
           }`}
         >
           {/* Shine effect on hover */}

@@ -198,7 +198,7 @@ html {
   animation-delay: 0.4s;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar (default = primary) */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -216,6 +216,20 @@ html {
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #629d73 0%, #4f7d5c 100%);
+}
+
+/* Chat scrollbar – match agent theme */
+.chat-messages[data-chat-theme="green"]::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+}
+.chat-messages[data-chat-theme="green"]::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+}
+.chat-messages[data-chat-theme="orange"]::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #f97316 0%, #ea580c 100%);
+}
+.chat-messages[data-chat-theme="orange"]::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ea580c 0%, #c2410c 100%);
 }
 
 /* Selection color */
