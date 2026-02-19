@@ -4,9 +4,11 @@ from datetime import date
 from typing import Optional
 from sqlalchemy.orm import Session
 
+from app.core.logging import log_function_call
 from app.models.plan import Plan, PlanType
 from app.models.goal import GoalType
-from app.schemas.plan_data import MealPlanData, WorkoutPlanData
+from app.services.nutritionist.planning.meal_plan_schema import MealPlanData
+from app.services.trainer.planning.workout_plan_schema import WorkoutPlanData
 from app.services.plan_generation.base import BasePlanGenerator
 
 # Schema for Bedrock structured output: LLM must return JSON matching this shape
@@ -87,7 +89,13 @@ Create a detailed, personalized workout plan that includes:
 4. **Weekly Schedule**: Day-by-day breakdown
    - What type of workout each day (all 7 days: day 1 = Monday, day 7 = Sunday)
    - Brief description of focus for each day
-   - Specific exercises for each workout day (optional but recommended)
+   - Specific exercises for each workout day with details. Each exercise must have an "exercise_type" field:
+     * "strength" - requires: name, sets (number), reps (string), weight (string), optional notes
+     * "cardio" - requires: name, duration (string), intensity (string), optional distance (string), optional notes
+     * "flexibility" - requires: name, duration (string), optional notes
+     * Example strength: {{"exercise_type": "strength", "name": "Barbell Squats", "sets": 4, "reps": "8-10", "weight": "moderate"}}
+     * Example cardio: {{"exercise_type": "cardio", "name": "6 mile run", "duration": "45-50 minutes", "distance": "6 miles", "intensity": "moderate pace"}}
+     * Example flexibility: {{"exercise_type": "flexibility", "name": "Yoga Flow", "duration": "20 minutes"}}
    - Include rest days
 
 5. **Sample Exercises** for each focus area:
@@ -129,61 +137,58 @@ Create a detailed, personalized workout plan that includes:
             is_active=True,
             is_completed=False
         )
-        
         self.db.add(plan)
-        self.db.commit()
-        self.db.refresh(plan)
-        
+        # Do not commit here: commit only after plan_data is set in generate()
         return plan
     
+    @log_function_call()
     async def generate(self, duration_days: int = 30) -> Plan:
         """
         Generate a personalized workout plan.
-        
+
         If a meal plan exists, it will be used for context to ensure
         the workout plan is coordinated with nutrition.
-        
-        Args:
-            duration_days: Duration of the plan in days (default: 30)
-        
-        Returns:
-            Plan object with workout plan data in plan_data["exercise"]
-        """
-        plan = self._get_or_create_plan(duration_days)
-        
-        # Get existing meal plan (separate plan type) for context if available
-        existing_meal_plan = None
-        meal_plan = self.db.query(Plan).filter(
-            Plan.user_id == self.user_id,
-            Plan.plan_type == PlanType.MEAL,
-            Plan.is_active == True
-        ).first()
-        if meal_plan:
-            try:
-                existing_meal_plan = MealPlanData.from_stored(meal_plan.plan_data)
-            except Exception:
-                # If meal plan data is invalid, skip it (don't fail workout generation)
-                pass
-        
-        prompt = self._build_prompt(existing_meal_plan)
-        messages = [{"role": "user", "content": prompt}]
-        system_prompt = (
-            "You are an expert personal trainer. Create a personalized workout plan. "
-            "Your response must be valid JSON that matches the required schema exactly."
-        )
-        
-        result = self.bedrock.invoke_structured(
-            messages=messages,
-            output_schema=WORKOUT_PLAN_OUTPUT_SCHEMA,
-            system_prompt=system_prompt,
-            max_tokens=4096,
-            temperature=0.5,
-        )
-        canonical = WorkoutPlanData.model_validate(result)
-        plan.plan_data = canonical.model_dump(mode="json")
-        
-        self.db.commit()
-        self.db.refresh(plan)
-        
-        return plan
 
+        The plan row is only committed after plan_data is successfully
+        generated and validated; on any exception the transaction is
+        rolled back so no empty plan is left in the DB.
+        """
+        try:
+            plan = self._get_or_create_plan(duration_days)
+
+            # Get existing meal plan (separate plan type) for context if available
+            existing_meal_plan = None
+            meal_plan = self.db.query(Plan).filter(
+                Plan.user_id == self.user_id,
+                Plan.plan_type == PlanType.MEAL,
+                Plan.is_active == True
+            ).first()
+            if meal_plan:
+                try:
+                    existing_meal_plan = MealPlanData.from_stored(meal_plan.plan_data)
+                except Exception:
+                    pass
+
+            prompt = self._build_prompt(existing_meal_plan)
+            messages = [{"role": "user", "content": prompt}]
+            system_prompt = (
+                "You are an expert personal trainer. Create a personalized workout plan. "
+                "Your response must be valid JSON that matches the required schema exactly."
+            )
+
+            result = self.bedrock.invoke_structured(
+                messages=messages,
+                output_schema=WORKOUT_PLAN_OUTPUT_SCHEMA,
+                system_prompt=system_prompt,
+                max_tokens=4096,
+                temperature=0.5,
+            )
+            canonical = WorkoutPlanData.model_validate(result)
+            plan.plan_data = canonical.model_dump(mode="json")
+
+            self.db.commit()
+            self.db.refresh(plan)
+            return plan
+        except Exception:
+            self.db.rollback()
+            raise

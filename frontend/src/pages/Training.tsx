@@ -1,3 +1,4 @@
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/Layout/AppShell';
 import { useAppState, type PlanViewResponse } from '../lib/state';
@@ -18,10 +19,15 @@ export default function Training() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const [isExpanded, setIsExpanded] = React.useState(false);
+
+  // Always include details for day view - no extra API call needed
   const { data: todayView } = useQuery({
     queryKey: ['planView', planId, todayISODate()],
     queryFn: async (): Promise<PlanViewResponse> => {
-      const res = await apiClient.get(`/api/plans/${planId}/view`, { params: { date: todayISODate() } });
+      const res = await apiClient.get(`/api/plans/${planId}/view`, {
+        params: { date: todayISODate(), include_detail: true },
+      });
       return res.data as PlanViewResponse;
     },
     enabled: Boolean(planId),
@@ -122,19 +128,78 @@ export default function Training() {
             <div className="space-y-4">
               {/* Today's workout */}
               {todayView?.workout ? (
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500 mb-1">Today&apos;s workout</div>
-                  <div className="text-lg font-semibold text-gray-900">{todayView.workout.type}</div>
-                  {todayView.workout.description ? (
-                    <p className="mt-1 text-sm text-gray-700">{todayView.workout.description}</p>
-                  ) : null}
-                  {todayView.exercises && todayView.exercises.length > 0 ? (
-                    <ul className="mt-3 list-disc list-inside text-sm text-gray-600 space-y-0.5">
-                      {todayView.exercises.map((ex, i) => (
-                        <li key={i}>{ex}</li>
-                      ))}
-                    </ul>
-                  ) : null}
+                <div className="rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="w-full p-4 text-left hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="text-xs text-gray-500 mb-1">Today&apos;s workout</div>
+                        <div className="text-lg font-semibold text-gray-900">{todayView.workout.type}</div>
+                        {todayView.workout.description ? (
+                          <p className="mt-1 text-sm text-gray-700">{todayView.workout.description}</p>
+                        ) : null}
+                        {!isExpanded && todayView.exercises && todayView.exercises.length > 0 ? (
+                          <ul className="mt-3 list-disc list-inside text-sm text-gray-600 space-y-0.5">
+                            {todayView.exercises.map((ex, i) => (
+                              <li key={i}>{ex}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                      <svg
+                        className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+                  {isExpanded && todayView.exercise_details && todayView.exercise_details.length > 0 && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 space-y-3">
+                      <div className="text-xs font-medium text-gray-500 mb-2">Exercise Details</div>
+                      <ul className="space-y-3">
+                        {todayView.exercise_details.map((ex, i) => (
+                          <li key={i} className="text-sm">
+                            <div className="font-medium text-gray-900">{ex.name}</div>
+                            <div className="mt-1 text-gray-600 space-y-0.5">
+                              {ex.exercise_type === 'strength' && (
+                                <>
+                                  <div>Sets: {ex.sets}</div>
+                                  <div>Reps: {ex.reps}</div>
+                                  <div>Weight: {ex.weight}</div>
+                                </>
+                              )}
+                              {ex.exercise_type === 'cardio' && (
+                                <>
+                                  <div>Duration: {ex.duration}</div>
+                                  {ex.distance && <div>Distance: {ex.distance}</div>}
+                                  <div>Intensity: {ex.intensity}</div>
+                                </>
+                              )}
+                              {ex.exercise_type === 'flexibility' && (
+                                <div>Duration: {ex.duration}</div>
+                              )}
+                              {ex.notes && <div className="text-xs italic mt-1">{ex.notes}</div>}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {isExpanded && (!todayView.exercise_details || todayView.exercise_details.length === 0) && todayView.exercises && todayView.exercises.length > 0 && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-200">
+                      <ul className="list-disc list-inside text-sm text-gray-600 space-y-0.5">
+                        {todayView.exercises.map((ex, i) => (
+                          <li key={i}>{ex}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">

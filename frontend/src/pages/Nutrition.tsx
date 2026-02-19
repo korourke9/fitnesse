@@ -1,3 +1,4 @@
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '../components/Layout/AppShell';
 import { useAppState, type PlanViewResponse } from '../lib/state';
@@ -18,10 +19,15 @@ export default function Nutrition() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const [expandedMeal, setExpandedMeal] = React.useState<string | null>(null);
+
+  // Always include details for day view - no extra API call needed
   const { data: todayView } = useQuery({
     queryKey: ['planView', planId, todayISODate()],
     queryFn: async (): Promise<PlanViewResponse> => {
-      const res = await apiClient.get(`/api/plans/${planId}/view`, { params: { date: todayISODate() } });
+      const res = await apiClient.get(`/api/plans/${planId}/view`, {
+        params: { date: todayISODate(), include_detail: true },
+      });
       return res.data as PlanViewResponse;
     },
     enabled: Boolean(planId),
@@ -147,12 +153,52 @@ export default function Nutrition() {
                 <div>
                   <div className="text-xs text-gray-500 mb-2">Today&apos;s meals</div>
                   <ul className="space-y-2">
-                    {todayView.meals.map((meal, i) => (
-                      <li key={i} className="rounded-xl border border-gray-100 bg-white px-4 py-3 flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-gray-500 capitalize">{meal.meal_type}</span>
-                        <span className="text-sm font-medium text-gray-900">{meal.name}</span>
-                      </li>
-                    ))}
+                    {todayView.meals.map((meal, i) => {
+                      const mealKey = `${meal.meal_type}-${i}`;
+                      const isExpanded = expandedMeal === mealKey;
+                      return (
+                        <li key={i} className="rounded-xl border border-gray-100 bg-white overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedMeal(isExpanded ? null : mealKey)}
+                            className="w-full px-4 py-3 flex items-center justify-between gap-2 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 text-left">
+                              <span className="text-xs font-medium text-gray-500 capitalize min-w-[80px]">{meal.meal_type}</span>
+                              <span className="text-sm font-medium text-gray-900">{meal.name}</span>
+                            </div>
+                            <svg
+                              className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          {isExpanded && (meal.ingredients || meal.instructions) && (
+                            <div className="px-4 pb-4 pt-2 border-t border-gray-100 space-y-3">
+                              {meal.ingredients && meal.ingredients.length > 0 && (
+                                <div>
+                                  <div className="text-xs font-medium text-gray-500 mb-1">Ingredients</div>
+                                  <ul className="text-sm text-gray-700 list-disc list-inside space-y-0.5">
+                                    {meal.ingredients.map((ing, idx) => (
+                                      <li key={idx}>{ing}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {meal.instructions && (
+                                <div>
+                                  <div className="text-xs font-medium text-gray-500 mb-1">Instructions</div>
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{meal.instructions}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ) : null}

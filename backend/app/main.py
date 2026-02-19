@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.logging import log_function_call  # Initialize logging config
 from app.api import chat, state, plans, logs
 
 app = FastAPI(

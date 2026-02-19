@@ -5,10 +5,13 @@ from typing import Any, Dict
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.logging import log_function_call
 from app.dao import UserDAO, UserProfileDAO, GoalDAO, PlanDAO
 from app.models.plan import Plan, PlanType
-from app.schemas.plan_data import WorkoutPlanData
-from app.services.plan_generation import WorkoutPlanGenerator
+from app.services.trainer.planning import (
+    WorkoutPlanData,
+    WorkoutPlanGenerator,
+)
 
 
 class TrainingService:
@@ -49,21 +52,37 @@ class TrainingService:
         generator = WorkoutPlanGenerator(db=self.db, user_id=user.id)
         return await generator.generate(duration_days=duration_days)
 
-    def get_today_view_for_plan(self, plan: Plan, view_date: date) -> Dict[str, Any]:
+    @log_function_call()
+    def get_today_view_for_plan(self, plan: Plan, view_date: date, include_detail: bool = True) -> Dict[str, Any]:
         """Build today's workout view from the plan's canonical data (no fallback logic)."""
         model = WorkoutPlanData.from_stored(plan.plan_data)
         day_num = view_date.weekday() + 1  # 1=Monday .. 7=Sunday
         day_workout = next((d for d in model.weekly_schedule if d.day == day_num), None)
+
         if day_workout:
             workout = {"type": day_workout.type, "description": day_workout.description}
-            exercises = list(day_workout.exercises)
+            # Populate exercises from exercise_details if exercises list is empty
+            if day_workout.exercises:
+                exercises = list(day_workout.exercises)
+            elif day_workout.exercise_details:
+                exercises = [ex.name for ex in day_workout.exercise_details]
+            else:
+                exercises = []
+            
+            # Populate exercise_details when requested
+            exercise_details = None
+            if include_detail and day_workout.exercise_details:
+                exercise_details = [ex.model_dump(mode="json") for ex in day_workout.exercise_details]
         else:
             workout = {"type": "Rest or light activity", "description": "Listen to your body."}
             exercises = []
+            exercise_details = None
+
         return {
             "date": view_date.isoformat(),
             "plan_type": PlanType.WORKOUT.value,
             "workout": workout,
             "exercises": exercises,
+            "exercise_details": exercise_details,
         }
 

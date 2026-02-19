@@ -7,8 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.dao import UserDAO, UserProfileDAO, GoalDAO, PlanDAO
 from app.models.plan import Plan, PlanType
-from app.schemas.plan_data import MealPlanData
-from app.services.plan_generation import MealPlanGenerator
+from app.services.nutritionist.planning import MealPlanData, MealPlanGenerator
 
 
 class NutritionService:
@@ -49,7 +48,7 @@ class NutritionService:
         generator = MealPlanGenerator(db=self.db, user_id=user.id)
         return await generator.generate(duration_days=duration_days)
 
-    def get_today_view_for_plan(self, plan: Plan, view_date: date) -> Dict[str, Any]:
+    def get_today_view_for_plan(self, plan: Plan, view_date: date, include_detail: bool = True) -> Dict[str, Any]:
         """Build today's meal view from the plan's canonical data (no fallback logic)."""
         model = MealPlanData.from_stored(plan.plan_data)
         day_num = view_date.weekday() + 1  # 1=Monday .. 7=Sunday
@@ -57,8 +56,14 @@ class NutritionService:
         meals = []
         if day_meals:
             meals = [
-                {"meal_type": m.meal_type, "name": m.name, "nutrition": m.nutrition}
-                for m in day_meals.meals
+                {
+                    "meal_type": m.meal_type,
+                    "name": m.name,
+                    "nutrition": m.nutrition,
+                    "ingredients": m.ingredients if include_detail else None,
+                    "instructions": m.instructions if include_detail else None,
+                }
+                for m in day_meals.meals  # m is MealRecipe
             ]
         return {
             "date": view_date.isoformat(),

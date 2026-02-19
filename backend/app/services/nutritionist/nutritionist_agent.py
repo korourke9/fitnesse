@@ -5,12 +5,12 @@ from sqlalchemy.orm import Session
 from app.models.conversation import AgentType
 from app.models.message import Message
 from app.services.agents import AgentResponse, Transition
-from app.services.plan_generation import MealPlanGenerator
+from app.services.nutritionist.planning import MealPlanGenerator
 from app.services.bedrock import BedrockService
 from app.services.nutritionist.logging.meal_logging_service import MealLoggingService
 from app.dao import PlanDAO
 from app.models.plan import PlanType
-from app.schemas.plan_data import MealPlanData
+from app.services.nutritionist.planning import MealPlanData
 
 
 class NutritionistAgent:

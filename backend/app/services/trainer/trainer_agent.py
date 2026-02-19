@@ -5,12 +5,11 @@ from sqlalchemy.orm import Session
 from app.models.conversation import AgentType
 from app.models.message import Message
 from app.services.agents import AgentResponse, Transition
-from app.services.plan_generation import WorkoutPlanGenerator
+from app.services.trainer.planning import WorkoutPlanGenerator, WorkoutPlanData
 from app.services.bedrock import BedrockService
 from app.services.trainer.logging.workout_logging_service import WorkoutLoggingService
 from app.dao import PlanDAO
 from app.models.plan import PlanType
-from app.schemas.plan_data import WorkoutPlanData
 
 
 class TrainerAgent:

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.plan import Plan, PlanType
 from app.models.goal import GoalType
-from app.schemas.plan_data import MealPlanData
+from app.services.nutritionist.planning.meal_plan_schema import MealPlanData
 from app.services.plan_generation.base import BasePlanGenerator
 
 # Schema for Bedrock structured output: LLM must return JSON matching this shape
@@ -68,6 +68,11 @@ Create a detailed, personalized nutrition plan that includes:
    - Each day should include breakfast, lunch, dinner, and optionally snacks
    - Vary meals across the week for variety and nutrition balance
    - Respect dietary preferences and cooking constraints
+   - For each meal, include:
+     * Name of the meal
+     * Ingredients list (specific quantities when helpful)
+     * Brief cooking instructions (2-4 steps, keep it simple)
+     * Optional nutrition info (calories, protein, carbs, fat) if known
 
 6. **Plan Notes**: Explain why this plan fits their specific goals and situation"""
     
@@ -103,44 +108,41 @@ Create a detailed, personalized nutrition plan that includes:
             is_active=True,
             is_completed=False
         )
-        
         self.db.add(plan)
-        self.db.commit()
-        self.db.refresh(plan)
-        
+        # Do not commit here: commit only after plan_data is set in generate()
         return plan
     
     async def generate(self, duration_days: int = 30) -> Plan:
         """
         Generate a personalized meal plan.
-        
-        Args:
-            duration_days: Duration of the plan in days (default: 30)
-        
-        Returns:
-            Plan object with meal plan data in plan_data["diet"]
-        """
-        plan = self._get_or_create_plan(duration_days)
-        
-        prompt = self._build_prompt()
-        messages = [{"role": "user", "content": prompt}]
-        system_prompt = (
-            "You are an expert nutritionist. Create a personalized meal plan. "
-            "Your response must be valid JSON that matches the required schema exactly."
-        )
-        
-        result = self.bedrock.invoke_structured(
-            messages=messages,
-            output_schema=MEAL_PLAN_OUTPUT_SCHEMA,
-            system_prompt=system_prompt,
-            max_tokens=4096,
-            temperature=0.5,
-        )
-        canonical = MealPlanData.model_validate(result)
-        plan.plan_data = canonical.model_dump(mode="json")
-        
-        self.db.commit()
-        self.db.refresh(plan)
-        
-        return plan
 
+        The plan row is only committed after plan_data is successfully
+        generated and validated; on any exception the transaction is
+        rolled back so no empty plan is left in the DB.
+        """
+        try:
+            plan = self._get_or_create_plan(duration_days)
+
+            prompt = self._build_prompt()
+            messages = [{"role": "user", "content": prompt}]
+            system_prompt = (
+                "You are an expert nutritionist. Create a personalized meal plan. "
+                "Your response must be valid JSON that matches the required schema exactly."
+            )
+
+            result = self.bedrock.invoke_structured(
+                messages=messages,
+                output_schema=MEAL_PLAN_OUTPUT_SCHEMA,
+                system_prompt=system_prompt,
+                max_tokens=4096,
+                temperature=0.5,
+            )
+            canonical = MealPlanData.model_validate(result)
+            plan.plan_data = canonical.model_dump(mode="json")
+
+            self.db.commit()
+            self.db.refresh(plan)
+            return plan
+        except Exception:
+            self.db.rollback()
+            raise

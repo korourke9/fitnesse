@@ -5,6 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.logging import log_function_call
+
 from app.core.database import get_db
 from app.dao import PlanDAO, UserDAO
 from app.api.schemas.plans import (
@@ -13,7 +15,8 @@ from app.api.schemas.plans import (
     PlanViewResponse,
 )
 from app.models.plan import PlanType
-from app.schemas.plan_data import MealPlanData, WorkoutPlanData
+from app.services.nutritionist.planning import MealPlanData
+from app.services.trainer.planning import WorkoutPlanData
 from app.services.nutritionist import NutritionService
 from app.services.trainer import TrainingService
 
@@ -59,9 +62,11 @@ async def create_workout_plan(
 
 
 @router.get("/{plan_id}/view", response_model=PlanViewResponse)
+@log_function_call()
 async def get_plan_view(
     plan_id: str,
     query_date: Optional[date] = Query(None, alias="date", description="Date for the view (default: today)"),
+    include_detail: bool = Query(True, description="Include full recipe/exercise details (default: true for day view)"),
     db: Session = Depends(get_db),
 ) -> PlanViewResponse:
     """Get today's view for a plan (meals or workout) for the given date."""
@@ -73,10 +78,10 @@ async def get_plan_view(
 
     if plan.plan_type == PlanType.MEAL:
         service = NutritionService(db)
-        payload = service.get_today_view_for_plan(plan, view_date)
+        payload = service.get_today_view_for_plan(plan, view_date, include_detail=include_detail)
     elif plan.plan_type == PlanType.WORKOUT:
         service = TrainingService(db)
-        payload = service.get_today_view_for_plan(plan, view_date)
+        payload = service.get_today_view_for_plan(plan, view_date, include_detail=include_detail)
     else:
         raise HTTPException(status_code=400, detail="Unsupported plan type")
 

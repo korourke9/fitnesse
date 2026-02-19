@@ -6,7 +6,8 @@ from app.dao import UserDAO, PlanDAO, GoalDAO, UserProfileDAO
 from app.api.schemas.state import AppStateResponse, SectionState, PlanSummary
 from app.models.plan import PlanType
 from app.models.log import Log, LogType
-from app.schemas.plan_data import MealPlanData, WorkoutPlanData
+from app.services.nutritionist.planning import MealPlanData
+from app.services.trainer.planning import WorkoutPlanData
 
 
 class StateService:
@@ -29,7 +30,7 @@ class StateService:
 
         onboarding_complete = bool(goals) and bool(profile)
 
-        # Load plan models (handles legacy data via from_stored)
+        # Load plan models (ValidationError => treat as no plan)
         # Gracefully handle invalid plan_data by treating as no plan
         meal_model = None
         if active_meal_plan:

@@ -16,7 +16,36 @@ export interface PlanViewMeal {
   meal_type: string;
   name: string;
   nutrition?: Record<string, unknown> | null;
+  ingredients?: string[] | null;
+  instructions?: string | null;
 }
+
+export interface PlanViewStrengthExercise {
+  exercise_type: 'strength';
+  name: string;
+  sets: number;
+  reps: string;
+  weight: string;
+  notes?: string | null;
+}
+
+export interface PlanViewCardioExercise {
+  exercise_type: 'cardio';
+  name: string;
+  duration: string;
+  distance?: string | null;
+  intensity: string;
+  notes?: string | null;
+}
+
+export interface PlanViewFlexibilityExercise {
+  exercise_type: 'flexibility';
+  name: string;
+  duration: string;
+  notes?: string | null;
+}
+
+export type PlanViewExerciseDetail = PlanViewStrengthExercise | PlanViewCardioExercise | PlanViewFlexibilityExercise;
 
 export interface PlanViewWorkout {
   type: string;
@@ -30,6 +59,7 @@ export interface PlanViewResponse {
   meals?: PlanViewMeal[];
   workout?: PlanViewWorkout | null;
   exercises?: string[];
+  exercise_details?: PlanViewExerciseDetail[] | null;
 }
 
 export interface SectionState {

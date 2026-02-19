@@ -1,7 +1,10 @@
-"""Plan generation services."""
-from app.services.plan_generation.base import BasePlanGenerator
-from app.services.plan_generation.meal_plan_generator import MealPlanGenerator
-from app.services.plan_generation.workout_plan_generator import WorkoutPlanGenerator
+"""Plan generation base utilities.
 
-__all__ = ["BasePlanGenerator", "MealPlanGenerator", "WorkoutPlanGenerator"]
+Note: MealPlanGenerator and WorkoutPlanGenerator have been moved to:
+- app.services.nutritionist.planning.MealPlanGenerator
+- app.services.trainer.planning.WorkoutPlanGenerator
+"""
+from app.services.plan_generation.base import BasePlanGenerator
+
+__all__ = ["BasePlanGenerator"]
 

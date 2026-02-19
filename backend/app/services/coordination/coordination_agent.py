@@ -154,7 +154,8 @@ class CoordinationAgent:
         
         context_parts.append("\nPlan Status:")
         # Use models to check plan validity
-        from app.schemas.plan_data import MealPlanData, WorkoutPlanData
+        from app.services.nutritionist.planning import MealPlanData
+        from app.services.trainer.planning import WorkoutPlanData
         try:
             has_meal_plan = bool(active_meal_plan and MealPlanData.from_stored(active_meal_plan.plan_data))
         except Exception:

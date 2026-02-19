@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.dao import UserDAO, PlanDAO
 from app.models.plan import PlanType
 from app.models.log import Log, LogType
-from app.schemas.plan_data import WorkoutPlanData
+from app.services.trainer.planning import WorkoutPlanData
 from app.services.bedrock import BedrockService
 from app.services.trainer.logging.workout_logging_schema import WorkoutParseResult
 
@@ -44,17 +44,14 @@ class WorkoutLoggingService:
         schema = WorkoutParseResult.model_json_schema(mode="serialization")
         system_prompt = (
             "You are a personal trainer assistant. Parse the user's workout description into structured data.\n\n"
-            "EXERCISES: Extract every exercise mentioned. For each exercise provide:\n"
-            "- name: exercise name (e.g. 'Bench Press', 'Running', 'Incline Walk')\n"
-            "- sets: number of sets if given (e.g. 3 for '3x8')\n"
-            "- reps: reps per set if given (e.g. '8' or '8-10')\n"
-            "- weight: weight used if given (e.g. '135 lbs', 'bodyweight')\n"
-            "- duration: for cardio (e.g. '30 min', '5 miles', '15 min')\n"
-            "Examples: 'bench 3x8' -> name=Bench Press, sets=3, reps='8'; '15 min incline walk' -> name=Incline Walk, duration='15 min'.\n\n"
-            "TOTAL: Estimate total_duration_minutes (sum of all exercise durations; for resistance assume ~3 min per set if not stated). "
-            "Estimate estimated_calories_burned (rough: cardio ~8-12 cal/min, resistance ~5-8 cal/min depending on intensity).\n"
-            "normalized_text: a clean one-line summary of the workout.\n"
-            "confidence: 0.0-1.0. Use questions[] only if critical info is missing.\n"
+            "EXERCISES: Extract every exercise. Each exercise MUST have an 'exercise_type' and the required fields for that type:\n"
+            "- strength: exercise_type='strength', name (str), sets (int), reps (str), weight (str), optional notes. "
+            "Use 0 or '' when not stated (e.g. 'bench 3x8' -> sets=3, reps='8', weight='' or 'as prescribed').\n"
+            "- cardio: exercise_type='cardio', name (str), duration (str, e.g. '30 min', '5 miles'), intensity (str), optional distance, optional notes.\n"
+            "- flexibility: exercise_type='flexibility', name (str), duration (str), optional notes.\n"
+            "Classify by what the exercise is: running/walking/cycling -> cardio; squats/bench/rows -> strength; yoga/stretching -> flexibility.\n\n"
+            "TOTAL: Estimate total_duration_minutes and estimated_calories_burned. "
+            "normalized_text: a clean one-line summary. confidence: 0.0-1.0. Use questions[] only if critical info is missing.\n"
             "Output valid JSON matching the schema exactly."
         )
 
